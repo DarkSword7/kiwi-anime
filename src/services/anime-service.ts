@@ -6,7 +6,7 @@ import type { AnimeSearchResult, AnimeInfo, Episode, StreamingLinks } from '@/ty
 
 const CONSUMET_API_URL = process.env.CONSUMET_API_URL || 'https://api.consumet.org';
 const ANIME_PROVIDER = '9anime'; // Using 9anime provider
-const CORS_PROXY_PREFIX = 'https://cors.consumet.stream/';
+// const CORS_PROXY_PREFIX = 'https://cors.consumet.stream/'; // Removed due to ENOTFOUND issues
 
 // Centralized error logging for API calls
 const logApiError = (error: any, context: string, requestUrl: string, queryParams?: object) => {
@@ -31,9 +31,7 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
 
 export async function searchAnime(query: string, page: number = 1): Promise<{ currentPage: number, hasNextPage: boolean, results: AnimeSearchResult[] }> {
   const context = 'searchAnime';
-  // Ensure the API URL doesn't get duplicated proxies if it's already prefixed
-  const baseEndpoint = `${CONSUMET_API_URL}/anime/${ANIME_PROVIDER}/${encodeURIComponent(query)}`;
-  const requestUrl = baseEndpoint.startsWith(CORS_PROXY_PREFIX) ? baseEndpoint : `${CORS_PROXY_PREFIX}${baseEndpoint}`;
+  const requestUrl = `${CONSUMET_API_URL}/anime/${ANIME_PROVIDER}/${encodeURIComponent(query)}`;
   
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { page });
 
@@ -46,7 +44,7 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
       return {
         currentPage: Number(data.currentPage) || page,
         hasNextPage: Boolean(data.hasNextPage),
-        results: (data.results || []) as AnimeSearchResult[], // Ensure results is always an array
+        results: (data.results || []) as AnimeSearchResult[],
       };
     } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
@@ -60,8 +58,7 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
 
 export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
   const context = 'getAnimeInfo';
-  const baseEndpoint = `${CONSUMET_API_URL}/anime/${ANIME_PROVIDER}/info/${id}`;
-  const requestUrl = baseEndpoint.startsWith(CORS_PROXY_PREFIX) ? baseEndpoint : `${CORS_PROXY_PREFIX}${baseEndpoint}`;
+  const requestUrl = `${CONSUMET_API_URL}/anime/${ANIME_PROVIDER}/info/${id}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}`);
 
@@ -96,8 +93,7 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
 
 export async function getEpisodeStreamingLinks(episodeId: string, server: string = 'vidstreaming'): Promise<StreamingLinks | null> {
   const context = 'getEpisodeStreamingLinks';
-  const baseEndpoint = `${CONSUMET_API_URL}/anime/${ANIME_PROVIDER}/watch/${episodeId}`;
-  const requestUrl = baseEndpoint.startsWith(CORS_PROXY_PREFIX) ? baseEndpoint : `${CORS_PROXY_PREFIX}${baseEndpoint}`;
+  const requestUrl = `${CONSUMET_API_URL}/anime/${ANIME_PROVIDER}/watch/${episodeId}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { server });
   
@@ -111,7 +107,7 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
         
         return {
             headers: data.headers || {},
-            sources: validSources, // Ensure sources is always an array
+            sources: validSources,
             download: data.download,
         } as StreamingLinks;
     } else {
@@ -131,19 +127,13 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
 export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
   const context = 'getTrendingAnimeList';
   console.log(`[anime-service] ${context}: Fetching page ${page}.`);
-  // Consumet's 9anime search doesn't have specific "trending" filters.
-  // Using a generic query that might fetch recent/popular shows.
   const searchResults = await searchAnime('top rated', page);
-  // Ensure results is an array before slicing
   return (searchResults.results || []).slice(0, 8); 
 }
 
 export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
   const context = 'getPopularAnimeList';
   console.log(`[anime-service] ${context}: Fetching page ${page}.`);
-  // Using a generic query for popular shows.
   const searchResults = await searchAnime('most popular', page);
-   // Ensure results is an array before slicing
   return (searchResults.results || []).slice(0, 8);
 }
-
