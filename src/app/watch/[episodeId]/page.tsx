@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, Suspense, useMemo } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
-import type { StreamingLinks, AnimeInfo } from '@/types/anime';
+import type { StreamingLinks, AnimeInfo, StreamingSource } from '@/types/anime';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -28,11 +28,11 @@ interface WatchPageServerProps {
 
 // Props for the client component WatchPageContent
 interface WatchPageContentProps {
-  episodeId: string; // episodeId is now a direct prop
+  episodeId: string; 
 }
 
 // Helper to manage Suspense for searchParams
-function WatchPageContent({ episodeId }: WatchPageContentProps) {
+function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const animeId = searchParams.get('animeId');
@@ -42,49 +42,78 @@ function WatchPageContent({ episodeId }: WatchPageContentProps) {
   const [animeDetails, setAnimeDetails] = useState<AnimeInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedServer, setSelectedServer] = useState<string>('vidstreaming'); // Default server
+  const [selectedServer, setSelectedServer] = useState<string>('vidstreaming'); 
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
 
-  const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape"]; // Common servers
+  const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape"]; 
+
+  console.log(`[WatchPageContent] Initializing for episodeId: ${episodeIdFromParams}, animeId: ${animeId}`);
 
   useEffect(() => {
     async function fetchData() {
-      if (!episodeId) return; 
+      console.log(`[WatchPageContent] fetchData triggered. episodeIdFromParams: ${episodeIdFromParams}, selectedServer: ${selectedServer}`);
+      if (!episodeIdFromParams) {
+          setError("Episode ID is missing.");
+          setIsLoading(false);
+          console.warn("[WatchPageContent] fetchData aborted: episodeIdFromParams is missing.");
+          return;
+      }
       setIsLoading(true);
       setError(null);
+      setStreamingInfo(null); // Reset previous streaming info
+      setSelectedQuality(undefined); // Reset previous quality
+
       try {
-        const links = await getEpisodeStreamingLinks(episodeId, selectedServer); 
+        const links = await getEpisodeStreamingLinks(episodeIdFromParams, selectedServer); 
+        console.log("[WatchPageContent] API getEpisodeStreamingLinks response:", JSON.stringify(links, null, 2));
+
         if (links && links.sources && links.sources.length > 0) {
           setStreamingInfo(links);
-          const defaultQuality = links.sources.find(s => s.quality === 'default' || s.quality === 'auto');
-          const firstQuality = links.sources[0]?.quality;
-          setSelectedQuality(defaultQuality?.quality || firstQuality);
+          const defaultQualitySource = links.sources.find(s => s.quality === 'default' || s.quality === 'auto');
+          const firstSource = links.sources[0];
+          const qualityToSet = defaultQualitySource?.quality || firstSource?.quality;
+          setSelectedQuality(qualityToSet);
+          console.log("[WatchPageContent] Streaming links found. Sources count:", links.sources.length, "Selected quality set to:", qualityToSet);
         } else {
-          setError(`No streaming links found for this episode on server ${selectedServer}. Try another server.`);
+          const errorMsg = `No streaming links found for this episode on server '${selectedServer}'. This could be due to the episode not being available, or an API issue. Try another server.`;
+          setError(errorMsg);
           setStreamingInfo(null);
+          console.warn("[WatchPageContent] No streaming links found or sources array is empty. Error set:", errorMsg);
         }
 
         if (animeId) {
+          console.log("[WatchPageContent] Fetching anime details for animeId:", animeId);
           const details = await getAnimeInfo(animeId);
           setAnimeDetails(details);
+          console.log("[WatchPageContent] Fetched anime details:", JSON.stringify(details, null, 2));
         }
 
       } catch (e: any) {
-        console.error("Failed to fetch streaming links or anime info:", e);
+        console.error("[WatchPageContent] Error in fetchData:", e);
         setError(e.message || "Could not load video information. Please try again or select a different server.");
         setStreamingInfo(null);
       } finally {
         setIsLoading(false);
+        console.log("[WatchPageContent] fetchData finished. isLoading set to false.");
       }
     }
     fetchData();
-  }, [episodeId, animeId, selectedServer]); 
+  }, [episodeIdFromParams, animeId, selectedServer]); 
 
   const handleServerChange = (newServer: string) => {
+    console.log("[WatchPageContent] Server changed to:", newServer);
     setSelectedServer(newServer);
   };
 
-  const currentSource = streamingInfo?.sources.find(s => s.quality === selectedQuality) || streamingInfo?.sources[0];
+  const currentSource = useMemo(() => {
+    if (!streamingInfo || !streamingInfo.sources || streamingInfo.sources.length === 0) {
+      return undefined;
+    }
+    const source = streamingInfo.sources.find(s => s.quality === selectedQuality) || streamingInfo.sources[0];
+    console.log("[WatchPageContent] currentSource derived:", JSON.stringify(source, null, 2), "from selectedQuality:", selectedQuality);
+    return source;
+  }, [streamingInfo, selectedQuality]);
+
 
   const navigateEpisode = (direction: 'next' | 'prev') => {
     if (!animeDetails || !animeDetails.episodes || currentEpNumber === 0) return;
@@ -130,7 +159,7 @@ function WatchPageContent({ episodeId }: WatchPageContentProps) {
           {animeDetails?.title || 'Anime Episode'}
         </h1>
         <p className="text-lg text-muted-foreground">
-          Episode {currentEpNumber || (episodeId ? episodeId.split('-').pop() : '')}
+          Episode {currentEpNumber || (episodeIdFromParams ? episodeIdFromParams.split('-').pop() : '')}
         </p>
       </div>
 
@@ -151,7 +180,7 @@ function WatchPageContent({ episodeId }: WatchPageContentProps) {
         {streamingInfo && streamingInfo.sources.length > 1 && (
            <div className="flex items-center gap-2">
            <span className="text-sm font-medium">Quality:</span>
-            <Select value={selectedQuality} onValueChange={setSelectedQuality}>
+            <Select value={selectedQuality || streamingInfo.sources[0]?.quality} onValueChange={setSelectedQuality}>
                 <SelectTrigger className="w-[120px] h-9">
                     <SelectValue placeholder="Quality"/>
                 </SelectTrigger>
@@ -168,7 +197,7 @@ function WatchPageContent({ episodeId }: WatchPageContentProps) {
       </div>
 
 
-      {error && !streamingInfo && (
+      {error && ( // Display error more prominently if it exists, even if streamingInfo also exists but might be stale
         <Alert variant="destructive" className="my-6">
           <Tv className="h-5 w-5" />
           <AlertTitle>Error Loading Video</AlertTitle>
@@ -176,8 +205,9 @@ function WatchPageContent({ episodeId }: WatchPageContentProps) {
         </Alert>
       )}
 
-      {streamingInfo && currentSource && (
+      {!error && streamingInfo && currentSource && (
         <MediaPlayer
+          key={currentSource.url} // Key to force re-mount on source change
           title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
           src={{ src: currentSource.url, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
@@ -189,7 +219,7 @@ function WatchPageContent({ episodeId }: WatchPageContentProps) {
         </MediaPlayer>
       )}
       
-      {(!streamingInfo || !currentSource) && !error && !isLoading && (
+      {!error && (!streamingInfo || !currentSource) && !isLoading && (
          <div className="my-6 p-6 bg-muted rounded-md text-center">
             <p className="text-muted-foreground">Video source not available. Please try a different server or check back later.</p>
          </div>
@@ -206,7 +236,7 @@ function WatchPageContent({ episodeId }: WatchPageContentProps) {
         </div>
       )}
 
-      {episodeId && !animeId && ( 
+      {episodeIdFromParams && !animeId && ( 
           <p className="mt-4 text-sm text-muted-foreground">Additional anime details could not be loaded.</p>
       )}
     </div>
