@@ -31,6 +31,8 @@ interface WatchPageContentProps {
   episodeId: string; 
 }
 
+const CORS_PROXY_URL = 'https://cors.consumet.stream/';
+
 // Helper to manage Suspense for searchParams
 function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentProps) {
   const router = useRouter();
@@ -48,6 +50,10 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
   const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape"]; 
 
   console.log(`[WatchPageContent] Initializing for episodeId: ${episodeIdFromParams}, animeId: ${animeId}`);
+   if (!episodeIdFromParams) {
+      console.warn("[WatchPageContent] Initialization aborted: episodeIdFromParams is missing.");
+      // Potentially set an error state here if needed, or rely on useEffect to handle it.
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -114,6 +120,22 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
     return source;
   }, [streamingInfo, selectedQuality]);
 
+  const playerSrcUrl = useMemo(() => {
+    if (!currentSource?.url) return undefined;
+
+    let url = currentSource.url;
+    // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
+    if (url.startsWith('http') && !url.includes('consumet.stream/') && !url.includes('animefreestream.vercel.app/')) {
+        // Ensure no double slashes if CORS_PROXY_URL ends with / and url starts with / (though url here should be absolute)
+        const fullUrl = new URL(url); 
+        url = `${CORS_PROXY_URL}${fullUrl.protocol}//${fullUrl.host}${fullUrl.pathname}${fullUrl.search}${fullUrl.hash}`;
+        console.log("[WatchPageContent] Using CORS proxied URL for player:", url);
+    } else {
+        console.log("[WatchPageContent] Using original URL for player (not proxying):", url);
+    }
+    return url;
+  }, [currentSource]);
+
 
   const navigateEpisode = (direction: 'next' | 'prev') => {
     if (!animeDetails || !animeDetails.episodes || currentEpNumber === 0) return;
@@ -134,7 +156,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
 
-  if (isLoading) {
+  if (isLoading && !streamingInfo) { // Show main loader only if we don't have any info yet
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
         <Loader2 className="w-16 h-16 text-primary animate-spin mb-4" />
@@ -166,7 +188,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
        <div className="my-4 flex flex-col sm:flex-row justify-between items-center gap-4 p-3 bg-card border rounded-md">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">Server:</span>
-          <Select value={selectedServer} onValueChange={handleServerChange}>
+          <Select value={selectedServer} onValueChange={handleServerChange} disabled={isLoading}>
             <SelectTrigger className="w-[150px] h-9">
               <SelectValue placeholder="Select server" />
             </SelectTrigger>
@@ -180,7 +202,11 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
         {streamingInfo && streamingInfo.sources.length > 1 && (
            <div className="flex items-center gap-2">
            <span className="text-sm font-medium">Quality:</span>
-            <Select value={selectedQuality || streamingInfo.sources[0]?.quality} onValueChange={setSelectedQuality}>
+            <Select 
+                value={selectedQuality || streamingInfo.sources[0]?.quality || 'default'} 
+                onValueChange={setSelectedQuality}
+                disabled={isLoading}
+            >
                 <SelectTrigger className="w-[120px] h-9">
                     <SelectValue placeholder="Quality"/>
                 </SelectTrigger>
@@ -194,10 +220,11 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
             </Select>
             </div>
         )}
+         {isLoading && <Loader2 className="w-5 h-5 text-primary animate-spin" />}
       </div>
 
 
-      {error && ( // Display error more prominently if it exists, even if streamingInfo also exists but might be stale
+      {error && ( 
         <Alert variant="destructive" className="my-6">
           <Tv className="h-5 w-5" />
           <AlertTitle>Error Loading Video</AlertTitle>
@@ -205,11 +232,11 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
         </Alert>
       )}
 
-      {!error && streamingInfo && currentSource && (
+      {!error && playerSrcUrl && currentSource && (
         <MediaPlayer
-          key={currentSource.url} // Key to force re-mount on source change
+          key={playerSrcUrl} 
           title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
-          src={{ src: currentSource.url, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
+          src={{ src: playerSrcUrl, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
           crossOrigin
           playsInline
@@ -219,11 +246,18 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
         </MediaPlayer>
       )}
       
-      {!error && (!streamingInfo || !currentSource) && !isLoading && (
+      {!error && !playerSrcUrl && !isLoading && (
          <div className="my-6 p-6 bg-muted rounded-md text-center">
             <p className="text-muted-foreground">Video source not available. Please try a different server or check back later.</p>
          </div>
       )}
+       {isLoading && !streamingInfo && !error && ( /* Loader specifically when changing servers and currentSource isn't ready */
+         <div className="my-6 p-6 bg-muted rounded-md text-center flex flex-col items-center justify-center aspect-video">
+            <Loader2 className="w-12 h-12 text-primary animate-spin mb-3" />
+            <p className="text-muted-foreground">Fetching new video source...</p>
+         </div>
+      )}
+
 
       {animeDetails && (
         <div className="mt-6 flex justify-between items-center">
@@ -257,3 +291,5 @@ export default function WatchPage({ params }: WatchPageServerProps) {
     </Suspense>
   );
 }
+
+    
