@@ -6,15 +6,8 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = GeistSans({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = GeistMono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
+// Removed incorrect GeistSans() and GeistMono() function calls.
+// The `GeistSans` and `GeistMono` imports are objects, and we use their `.variable` property.
 
 export const metadata: Metadata = {
   title: 'AniWave Lite - Your Anime Companion',
@@ -27,8 +20,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased flex flex-col min-h-screen`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      {/*
+        The `GeistSans.variable` and `GeistMono.variable` are applied to the <html> tag.
+        This makes CSS variables like --font-geist-sans available.
+        The `globals.css` file already applies `font-family: var(--font-geist-sans)` to the body.
+        The `font-sans` class on the body tag ensures Tailwind's typography utilities work as expected.
+      */}
+      <body className={`font-sans antialiased flex flex-col min-h-screen`}>
         <Header />
         <main className="flex-grow container mx-auto px-4 py-8">
           {children}
