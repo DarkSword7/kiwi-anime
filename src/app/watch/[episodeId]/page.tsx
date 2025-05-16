@@ -5,12 +5,12 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
-import type { StreamingLinks, StreamingSource, AnimeInfo } from '@/types/anime';
+import type { StreamingLinks, AnimeInfo } from '@/types/anime';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, ArrowLeft, Tv, ChevronLeft, ChevronRight, SkipBack, SkipForward } from 'lucide-react';
+import { Loader2, ArrowLeft, Tv, SkipBack, SkipForward } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -19,16 +19,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-
-interface WatchPageProps {
+// Props for the default export (Page component)
+interface WatchPageServerProps {
   params: {
     episodeId: string;
   };
 }
 
+// Props for the client component WatchPageContent
+interface WatchPageContentProps {
+  episodeId: string; // episodeId is now a direct prop
+}
+
 // Helper to manage Suspense for searchParams
-function WatchPageContent({ params }: WatchPageProps) {
-  const { episodeId: episodeIdFromParams } = params; // Destructure episodeId
+function WatchPageContent({ episodeId }: WatchPageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const animeId = searchParams.get('animeId');
@@ -45,18 +49,16 @@ function WatchPageContent({ params }: WatchPageProps) {
 
   useEffect(() => {
     async function fetchData() {
-      if (!episodeIdFromParams) return; // Use destructured episodeId
+      if (!episodeId) return; 
       setIsLoading(true);
       setError(null);
       try {
-        const links = await getEpisodeStreamingLinks(episodeIdFromParams, selectedServer); // Use destructured episodeId
+        const links = await getEpisodeStreamingLinks(episodeId, selectedServer); 
         if (links && links.sources && links.sources.length > 0) {
           setStreamingInfo(links);
-          // Auto-select best quality or 'default' if available
           const defaultQuality = links.sources.find(s => s.quality === 'default' || s.quality === 'auto');
           const firstQuality = links.sources[0]?.quality;
           setSelectedQuality(defaultQuality?.quality || firstQuality);
-
         } else {
           setError(`No streaming links found for this episode on server ${selectedServer}. Try another server.`);
           setStreamingInfo(null);
@@ -76,11 +78,10 @@ function WatchPageContent({ params }: WatchPageProps) {
       }
     }
     fetchData();
-  }, [episodeIdFromParams, animeId, selectedServer]); // Use destructured episodeId in dependency array
+  }, [episodeId, animeId, selectedServer]); 
 
   const handleServerChange = (newServer: string) => {
     setSelectedServer(newServer);
-    // Data will refetch due to useEffect dependency on selectedServer
   };
 
   const currentSource = streamingInfo?.sources.find(s => s.quality === selectedQuality) || streamingInfo?.sources[0];
@@ -129,7 +130,7 @@ function WatchPageContent({ params }: WatchPageProps) {
           {animeDetails?.title || 'Anime Episode'}
         </h1>
         <p className="text-lg text-muted-foreground">
-          Episode {currentEpNumber || (episodeIdFromParams ? episodeIdFromParams.split('-').pop() : '')}
+          Episode {currentEpNumber || (episodeId ? episodeId.split('-').pop() : '')}
         </p>
       </div>
 
@@ -157,7 +158,7 @@ function WatchPageContent({ params }: WatchPageProps) {
                 <SelectContent>
                     {streamingInfo.sources.map(source => (
                         <SelectItem key={source.quality || 'default'} value={source.quality || 'default'}>
-                            {source.quality || 'Default'}
+                            {source.quality || 'Default'} ({source.url.includes('.m3u8') ? 'HLS' : 'MP4'})
                         </SelectItem>
                     ))}
                 </SelectContent>
@@ -205,7 +206,7 @@ function WatchPageContent({ params }: WatchPageProps) {
         </div>
       )}
 
-      {episodeIdFromParams && !animeId && ( 
+      {episodeId && !animeId && ( 
           <p className="mt-4 text-sm text-muted-foreground">Additional anime details could not be loaded.</p>
       )}
     </div>
@@ -213,17 +214,16 @@ function WatchPageContent({ params }: WatchPageProps) {
 }
 
 
-export default function WatchPage(props: WatchPageProps) {
+export default function WatchPage({ params }: WatchPageServerProps) {
+  const episodeIdFromRoute = params.episodeId;
   return (
-    // Suspense is required for useSearchParams in Next.js App Router
     <Suspense fallback={
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
         <Loader2 className="w-16 h-16 text-primary animate-spin mb-4" />
         <p className="text-xl text-muted-foreground">Loading episode information...</p>
       </div>
     }>
-      <WatchPageContent {...props} />
+      <WatchPageContent episodeId={episodeIdFromRoute} />
     </Suspense>
   );
 }
-
