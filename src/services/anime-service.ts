@@ -23,7 +23,7 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
         responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated]' : '');
       }
     } else if (typeof responseData === 'object' && responseData !== null) {
-      // Attempt to stringify, but catch if it's too complex or circular (though less likely now)
+      // Attempt to stringify, but catch if it's too complex or circular
       try {
         responseData = JSON.stringify(responseData, null, 2);
       } catch (e) {
@@ -43,7 +43,7 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
 };
 
 export async function searchAnime(query: string, page: number = 1): Promise<{ currentPage: number, hasNextPage: boolean, results: AnimeSearchResult[] }> {
-  const context = 'searchAnime';
+  const context = 'searchAnime (9anime)';
   const requestUrl = `${API_BASE_URL}/anime/9anime/${encodeURIComponent(query)}`;
   
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { page });
@@ -70,7 +70,7 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
 }
 
 export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
-  const context = 'getAnimeInfo';
+  const context = 'getAnimeInfo (9anime)';
   const requestUrl = `${API_BASE_URL}/anime/9anime/info/${id}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}`);
@@ -86,7 +86,7 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
     let title = 'Unknown Title';
     if (data.title && typeof data.title === 'string') {
         title = data.title;
-    } else if (data.title && typeof data.title.romaji === 'string') { // Some providers use nested title objects
+    } else if (data.title && typeof data.title.romaji === 'string') {
         title = data.title.romaji;
     } else if (data.title && typeof data.title.english === 'string') {
         title = data.title.english;
@@ -103,7 +103,7 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
     
     return {
         ...data,
-        id: String(data.id || id), // Ensure id is always a string
+        id: String(data.id || id), 
         title: title,
         episodes,
     } as AnimeInfo;
@@ -118,14 +118,14 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
 }
 
 export async function getEpisodeStreamingLinks(episodeId: string, server: string = 'vidstreaming'): Promise<StreamingLinks | null> {
-  const context = 'getEpisodeStreamingLinks';
+  const context = 'getEpisodeStreamingLinks (9anime)';
   const requestUrl = `${API_BASE_URL}/anime/9anime/watch/${episodeId}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { server });
   
   try {
     const { data } = await axios.get(requestUrl, {
-      params: { server }, // The API expects 'server' as a query param
+      params: { server }, 
     });
 
     if (typeof data === 'object' && data !== null && Array.isArray(data.sources)) {
@@ -150,46 +150,41 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
   }
 }
 
-// For Trending and Popular, we use the generic Consumet endpoints, assuming the self-hosted API supports them.
-// If these need to be 9anime specific and such endpoints exist for 9anime, these URLs would need adjustment.
 export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getTrendingAnimeList (using /top-airing)';
-  const requestUrl = `${API_BASE_URL}/top-airing`; // Generic endpoint
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
+  const searchQuery = "top airing"; // Using a search query to approximate "trending"
+  const context = `getTrendingAnimeList (using 9anime search for "${searchQuery}")`;
+  console.log(`[anime-service] ${context}: Fetching page ${page}.`);
   
   try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-    if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[]; // Limit to 8 for homepage
-    } else if (Array.isArray(data)) { 
-      return (data || []).slice(0, 8) as AnimeSearchResult[];
+    const searchData = await searchAnime(searchQuery, page);
+    if (searchData && Array.isArray(searchData.results)) {
+      return (searchData.results || []).slice(0, 8); // Limit to 8 for homepage
     } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      console.warn(`[anime-service] ${context}: Unexpected data structure from search. Data:`, searchData);
       return [];
     }
   } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
+    // searchAnime already logs errors, so we might not need to log again here unless for specific context
+    console.error(`[anime-service] ${context}: Error calling searchAnime:`, error.message);
     return [];
   }
 }
 
 export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getPopularAnimeList (using /popular)';
-  const requestUrl = `${API_BASE_URL}/popular`; // Generic endpoint
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
+  const searchQuery = "popular"; // Using a search query to approximate "popular"
+  const context = `getPopularAnimeList (using 9anime search for "${searchQuery}")`;
+  console.log(`[anime-service] ${context}: Fetching page ${page}.`);
 
   try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-    if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[]; // Limit to 8 for homepage
-    } else if (Array.isArray(data)) { 
-      return (data || []).slice(0, 8) as AnimeSearchResult[];
+    const searchData = await searchAnime(searchQuery, page);
+     if (searchData && Array.isArray(searchData.results)) {
+      return (searchData.results || []).slice(0, 8); // Limit to 8 for homepage
     } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      console.warn(`[anime-service] ${context}: Unexpected data structure from search. Data:`, searchData);
       return [];
     }
   } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
+    console.error(`[anime-service] ${context}: Error calling searchAnime:`, error.message);
     return [];
   }
 }
