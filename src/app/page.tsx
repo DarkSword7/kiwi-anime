@@ -1,10 +1,18 @@
 import { AnimeCard } from '@/components/AnimeCard';
-import { getPopularAnime, getTrendingAnime } from '@/data/mock-anime';
+import { getPopularAnimeList, getTrendingAnimeList } from '@/services/anime-service';
 import Image from 'next/image';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
-export default function HomePage() {
-  const trendingAnime = getTrendingAnime();
-  const popularAnime = getPopularAnime();
+export default async function HomePage() {
+  // Fetch data in parallel
+  const [trendingAnimeResult, popularAnimeResult] = await Promise.allSettled([
+    getTrendingAnimeList(1),
+    getPopularAnimeList(1)
+  ]);
+
+  const trendingAnime = trendingAnimeResult.status === 'fulfilled' ? trendingAnimeResult.value : [];
+  const popularAnime = popularAnimeResult.status === 'fulfilled' ? popularAnimeResult.value : [];
 
   return (
     <div className="space-y-12">
@@ -22,9 +30,12 @@ export default function HomePage() {
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 text-primary">
             Welcome to AniWave Lite
           </h1>
-          <p className="text-lg md:text-xl text-foreground/80 max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl text-foreground/80 max-w-2xl mx-auto mb-6">
             Your portal to an exciting world of anime. Discover trending shows, popular series, and get personalized suggestions.
           </p>
+          <Button size="lg" asChild>
+            <Link href="/search">Explore Anime</Link>
+          </Button>
         </div>
       </section>
 
@@ -37,7 +48,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground">No trending anime available at the moment.</p>
+          <p className="text-muted-foreground">Could not load trending anime at the moment. Try refreshing.</p>
         )}
       </section>
 
@@ -50,7 +61,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground">No popular anime available at the moment.</p>
+          <p className="text-muted-foreground">Could not load popular anime at the moment. Try refreshing.</p>
         )}
       </section>
     </div>
