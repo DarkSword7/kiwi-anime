@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -25,6 +26,12 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 's4.anilist.co', // Fallback images from anilist if consumet fails for some reason
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.noitatnemucod.net', // Added for new Consumet/Zoro image source
         port: '',
         pathname: '/**',
       }

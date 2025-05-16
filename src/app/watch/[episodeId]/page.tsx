@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, Suspense } from 'react';
@@ -27,6 +28,7 @@ interface WatchPageProps {
 
 // Helper to manage Suspense for searchParams
 function WatchPageContent({ params }: WatchPageProps) {
+  const { episodeId: episodeIdFromParams } = params; // Destructure episodeId
   const router = useRouter();
   const searchParams = useSearchParams();
   const animeId = searchParams.get('animeId');
@@ -43,11 +45,11 @@ function WatchPageContent({ params }: WatchPageProps) {
 
   useEffect(() => {
     async function fetchData() {
-      if (!params.episodeId) return;
+      if (!episodeIdFromParams) return; // Use destructured episodeId
       setIsLoading(true);
       setError(null);
       try {
-        const links = await getEpisodeStreamingLinks(params.episodeId, selectedServer);
+        const links = await getEpisodeStreamingLinks(episodeIdFromParams, selectedServer); // Use destructured episodeId
         if (links && links.sources && links.sources.length > 0) {
           setStreamingInfo(links);
           // Auto-select best quality or 'default' if available
@@ -74,7 +76,7 @@ function WatchPageContent({ params }: WatchPageProps) {
       }
     }
     fetchData();
-  }, [params.episodeId, animeId, selectedServer]);
+  }, [episodeIdFromParams, animeId, selectedServer]); // Use destructured episodeId in dependency array
 
   const handleServerChange = (newServer: string) => {
     setSelectedServer(newServer);
@@ -127,7 +129,7 @@ function WatchPageContent({ params }: WatchPageProps) {
           {animeDetails?.title || 'Anime Episode'}
         </h1>
         <p className="text-lg text-muted-foreground">
-          Episode {currentEpNumber || params.episodeId.split('-').pop()}
+          Episode {currentEpNumber || (episodeIdFromParams ? episodeIdFromParams.split('-').pop() : '')}
         </p>
       </div>
 
@@ -203,7 +205,7 @@ function WatchPageContent({ params }: WatchPageProps) {
         </div>
       )}
 
-      {params.episodeId && !animeId && (
+      {episodeIdFromParams && !animeId && ( 
           <p className="mt-4 text-sm text-muted-foreground">Additional anime details could not be loaded.</p>
       )}
     </div>
@@ -224,3 +226,4 @@ export default function WatchPage(props: WatchPageProps) {
     </Suspense>
   );
 }
+
