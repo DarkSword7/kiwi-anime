@@ -17,10 +17,10 @@ export function SearchComponent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
 
-  const performSearch = async (term: string, page: number = 1) => {
+  const performSearch = async (term: string, pageToFetch: number = 1) => {
     if (term.trim() === '') {
       setResults([]);
-      setHasSearched(true); // Or false, depending on desired UX for empty search
+      setHasSearched(true);
       setHasNextPage(false);
       setIsLoading(false);
       setCurrentPage(1);
@@ -28,31 +28,29 @@ export function SearchComponent() {
     }
 
     setIsLoading(true);
-    if (page === 1) {
+    if (pageToFetch === 1) {
       setHasSearched(false); 
     }
     
     try {
-      const searchData = await searchAnime(term, page);
+      const searchData = await searchAnime(term, pageToFetch);
       
-      // Safely access properties, providing defaults if searchData or its properties are null/undefined
       const newApiResults = searchData?.results || [];
-      const apiCurrentPage = searchData?.currentPage || page;
-      const apiHasNextPage = !!searchData?.hasNextPage; // Ensure boolean
+      const apiCurrentPage = searchData?.currentPage || pageToFetch;
+      const apiHasNextPage = !!searchData?.hasNextPage;
 
-      if (page === 1) {
+      if (pageToFetch === 1) {
         setResults(newApiResults);
       } else {
-        // prevResults should always be an array due to useState initialization
-        setResults(prevResults => [...prevResults, ...newApiResults]);
+        setResults(prevResults => [...(prevResults || []), ...newApiResults]);
       }
       setCurrentPage(apiCurrentPage);
       setHasNextPage(apiHasNextPage);
     } catch (error) {
       console.error("Search failed:", error);
-      setResults([]);
+      setResults([]); // Ensure results is an array on error
       setHasNextPage(false);
-      // Optionally reset current page or display a more specific error message
+      setCurrentPage(1); // Reset page on error
     } finally {
       setIsLoading(false);
       setHasSearched(true);
@@ -72,13 +70,14 @@ export function SearchComponent() {
   };
   
   useEffect(() => {
-    if (searchTerm.trim() === '' && hasSearched) { 
+    // This effect now correctly clears results when searchTerm is empty *after* a search might have happened.
+    if (searchTerm.trim() === '' && results.length > 0) { 
       setResults([]);
-      setHasSearched(false);
+      setHasSearched(false); // Reset hasSearched if search term is cleared
       setHasNextPage(false);
       setCurrentPage(1);
     }
-  }, [searchTerm, hasSearched]);
+  }, [searchTerm, results.length]); // Depend on searchTerm and results.length to avoid unnecessary runs
 
   return (
     <div className="space-y-8">
@@ -90,6 +89,7 @@ export function SearchComponent() {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
+              // If the input is cleared, immediately reset search state.
               if (e.target.value.trim() === '') {
                 setResults([]);
                 setHasSearched(false);
@@ -119,7 +119,7 @@ export function SearchComponent() {
           )}
         </div>
         <Button type="submit" variant="default" size="lg" disabled={isLoading && searchTerm.trim() !== ''}>
-           {isLoading && searchTerm.trim() !== '' && results.length === 0 && page === 1 ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
+           {isLoading && searchTerm.trim() !== '' && results.length === 0 && currentPage === 1 ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
           Search
         </Button>
       </form>
@@ -167,3 +167,4 @@ export function SearchComponent() {
     </div>
   );
 }
+
