@@ -4,7 +4,7 @@
 import axios from 'axios';
 import type { AnimeSearchResult, AnimeInfo, Episode, StreamingLinks } from '@/types/anime';
 
-const AVALYNN_API_URL = 'https://avalynn.vercel.app';
+const API_BASE_URL = 'https://animefreestream.vercel.app'; // Changed to new self-hosted URL
 
 // Centralized error logging for API calls
 const logApiError = (error: any, context: string, requestUrl: string, queryParams?: object) => {
@@ -12,15 +12,13 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
   if (queryParams) {
     message += ` with params: ${JSON.stringify(queryParams)}`;
   }
-  // Check for axios error structure
+
   if (error.response) {
-    // The request was made and the server responded with a status code
-    // that falls out of the range of 2xx
     let responseDataString: string;
     const rawData = error.response.data;
 
     if (typeof rawData === 'string') {
-      if (rawData.trim().startsWith('<!DOCTYPE html>')) {
+      if (rawData.trim().startsWith('<!DOCTYPE html>') || rawData.trim().startsWith('<html')) {
         responseDataString = '[HTML Response - Truncated]';
       } else {
         responseDataString = rawData.substring(0, 500); // Log first 500 chars
@@ -32,6 +30,7 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
       try {
         responseDataString = JSON.stringify(rawData, null, 2);
       } catch (e) {
+        // Handle potential circular structures in non-HTML object responses
         responseDataString = '[Unserializable Object Response]';
       }
     } else if (rawData === undefined) {
@@ -41,18 +40,16 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
     }
     console.error(`${message}. Status: ${error.response.status}, Data: ${responseDataString}`);
   } else if (error.request) {
-    // The request was made but no response was received
-    // Avoid logging error.request directly due to circular structures
     console.error(`${message}. No response received. Code: ${error.code || 'N/A'}, Message: ${error.message}`);
   } else {
-    // Something happened in setting up the request that triggered an Error
     console.error(`${message}. Error:`, error.message);
   }
 };
 
 export async function searchAnime(query: string, page: number = 1): Promise<{ currentPage: number, hasNextPage: boolean, results: AnimeSearchResult[] }> {
   const context = 'searchAnime';
-  const requestUrl = `${AVALYNN_API_URL}/${encodeURIComponent(query)}`;
+  // Assuming the new API uses the query directly in the path like Gogoanime provider
+  const requestUrl = `${API_BASE_URL}/${encodeURIComponent(query)}`;
   
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { page });
 
@@ -79,7 +76,8 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
 
 export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
   const context = 'getAnimeInfo';
-  const requestUrl = `${AVALYNN_API_URL}/info/${id}`;
+  // Assuming the new API uses /info/:id like Gogoanime provider
+  const requestUrl = `${API_BASE_URL}/info/${id}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}`);
 
@@ -91,7 +89,6 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
       return null;
     }
     
-    // Ensure title is properly extracted even if it's nested
     let title = 'Unknown Title';
     if (data.title && typeof data.title === 'string') {
         title = data.title;
@@ -103,10 +100,8 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
         title = data.title.native;
     }
 
-
-    if (typeof data.id !== 'string' && typeof data.id !== 'number') { // ID can sometimes be a number from anilist
+    if (typeof data.id !== 'string' && typeof data.id !== 'number') {
         console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Missing or invalid id. Data:`, data);
-        // Allow proceeding if title is present, using provided id if possible or a placeholder
         if (!id && !(data.id)) return null; 
     }
     
@@ -114,7 +109,7 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
     
     return {
         ...data,
-        id: String(data.id || id), // Ensure id is a string
+        id: String(data.id || id),
         title: title,
         episodes,
     } as AnimeInfo;
@@ -130,7 +125,8 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
 
 export async function getEpisodeStreamingLinks(episodeId: string, server: string = 'vidstreaming'): Promise<StreamingLinks | null> {
   const context = 'getEpisodeStreamingLinks';
-  const requestUrl = `${AVALYNN_API_URL}/watch/${episodeId}`;
+  // Assuming the new API uses /watch/:episodeId like Gogoanime provider
+  const requestUrl = `${API_BASE_URL}/watch/${episodeId}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { server });
   
@@ -162,15 +158,16 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
 }
 
 export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getTrendingAnimeList (now /top-airing)';
-  const requestUrl = `${AVALYNN_API_URL}/top-airing`;
+  const context = 'getTrendingAnimeList (using /top-airing)';
+  // Assuming the new API uses /top-airing like Gogoanime provider
+  const requestUrl = `${API_BASE_URL}/top-airing`;
   console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
   
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
       return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (Array.isArray(data)) { 
+    } else if (Array.isArray(data)) { // Some APIs might return array directly
       return (data || []).slice(0, 8) as AnimeSearchResult[];
     } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
@@ -183,15 +180,16 @@ export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearc
 }
 
 export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getPopularAnimeList (now /popular)';
-  const requestUrl = `${AVALYNN_API_URL}/popular`;
+  const context = 'getPopularAnimeList (using /popular)';
+  // Assuming the new API uses /popular like Gogoanime provider
+  const requestUrl = `${API_BASE_URL}/popular`;
   console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
 
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
       return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (Array.isArray(data)) { 
+    } else if (Array.isArray(data)) { // Some APIs might return array directly
       return (data || []).slice(0, 8) as AnimeSearchResult[];
     } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
