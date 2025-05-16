@@ -70,7 +70,6 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined); 
-      // setHlsProviderInstance(null); // Reset HLS provider instance if needed, though Vidstack might handle re-init
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromParams, selectedServer); 
@@ -78,7 +77,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
 
         if (links && links.sources && links.sources.length > 0) {
           setStreamingInfo(links);
-          const defaultQualitySource = links.sources.find(s => s.quality === 'default' || s.quality === 'auto' || s.quality?.toLowerCase().includes('auto'));
+          const defaultQualitySource = links.sources.find(s => s.quality?.toLowerCase() === 'default' || s.quality?.toLowerCase() === 'auto' || s.quality?.toLowerCase().includes('auto'));
           const firstSource = links.sources[0];
           const qualityToSet = defaultQualitySource?.quality || firstSource?.quality;
           setSelectedQuality(qualityToSet);
@@ -111,6 +110,30 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
     }
     fetchData();
   }, [episodeIdFromParams, animeId, selectedServer]); 
+
+  const currentSource = useMemo(() => {
+    if (!streamingInfo || !streamingInfo.sources || streamingInfo.sources.length === 0) {
+      return undefined;
+    }
+    const source = streamingInfo.sources.find(s => s.quality === selectedQuality) || streamingInfo.sources[0];
+    console.log("[WatchPageContent] currentSource derived:", JSON.stringify(source, null, 2), "from selectedQuality:", selectedQuality);
+    return source;
+  }, [streamingInfo, selectedQuality]);
+
+  const playerSrcUrl = useMemo(() => {
+    if (!currentSource?.url) return undefined;
+
+    let url = currentSource.url;
+    // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
+    if (url.startsWith('http') && !url.includes('consumet.stream/') && !url.includes('animefreestream.vercel.app/')) {
+        const fullUrl = new URL(url); 
+        url = `${CORS_PROXY_URL}${fullUrl.protocol}//${fullUrl.host}${fullUrl.pathname}${fullUrl.search}${fullUrl.hash}`;
+        console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
+    } else {
+        console.log("[WatchPageContent] Using original URL for player manifest (not proxying):", url);
+    }
+    return url;
+  }, [currentSource]);
 
   useEffect(() => {
     if (hlsProviderInstance && streamingInfo?.headers && currentSource?.isM3U8) {
@@ -145,30 +168,6 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
     console.log("[WatchPageContent] Server changed to:", newServer);
     setSelectedServer(newServer);
   };
-
-  const currentSource = useMemo(() => {
-    if (!streamingInfo || !streamingInfo.sources || streamingInfo.sources.length === 0) {
-      return undefined;
-    }
-    const source = streamingInfo.sources.find(s => s.quality === selectedQuality) || streamingInfo.sources[0];
-    console.log("[WatchPageContent] currentSource derived:", JSON.stringify(source, null, 2), "from selectedQuality:", selectedQuality);
-    return source;
-  }, [streamingInfo, selectedQuality]);
-
-  const playerSrcUrl = useMemo(() => {
-    if (!currentSource?.url) return undefined;
-
-    let url = currentSource.url;
-    // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
-    if (url.startsWith('http') && !url.includes('consumet.stream/') && !url.includes('animefreestream.vercel.app/')) {
-        const fullUrl = new URL(url); 
-        url = `${CORS_PROXY_URL}${fullUrl.protocol}//${fullUrl.host}${fullUrl.pathname}${fullUrl.search}${fullUrl.hash}`;
-        console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
-    } else {
-        console.log("[WatchPageContent] Using original URL for player manifest (not proxying):", url);
-    }
-    return url;
-  }, [currentSource]);
 
 
   const navigateEpisode = (direction: 'next' | 'prev') => {
@@ -334,3 +333,4 @@ export default function WatchPage({ params }: WatchPageServerProps) {
     </Suspense>
   );
 }
+
