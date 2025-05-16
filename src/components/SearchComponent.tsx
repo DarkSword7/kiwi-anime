@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X, Loader2 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
-import { useDebounce } from '@/hooks/use-debounce'; // Assuming a debounce hook exists or will be created
+// import { useDebounce } from '@/hooks/use-debounce'; // Debounce hook is available if needed
 
 export function SearchComponent() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,7 +17,7 @@ export function SearchComponent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  // const debouncedSearchTerm = useDebounce(searchTerm, 500); // If using debounce
 
   const performSearch = async (term: string, page: number = 1) => {
     if (term.trim() === '') {
@@ -25,11 +25,16 @@ export function SearchComponent() {
       setHasSearched(true);
       setHasNextPage(false);
       setIsLoading(false);
+      setCurrentPage(1);
       return;
     }
 
     setIsLoading(true);
-    setHasSearched(false); // Reset hasSearched until new results come
+    // setHasSearched(false); // Keep true if loading more, reset only for new term
+    if (page === 1) {
+      setHasSearched(false); // Reset for new search term
+    }
+    
     try {
       const searchData = await searchAnime(term, page);
       if (page === 1) {
@@ -41,7 +46,7 @@ export function SearchComponent() {
       setHasNextPage(searchData.hasNextPage);
     } catch (error) {
       console.error("Search failed:", error);
-      setResults([]);
+      setResults([]); // Clear results on error
       setHasNextPage(false);
       // Optionally, set an error state to display to the user
     } finally {
@@ -58,18 +63,16 @@ export function SearchComponent() {
   };
 
   // Optional: Debounced search as user types (triggered by debouncedSearchTerm change)
-   useEffect(() => {
-     if (debouncedSearchTerm.trim() !== '' && !hasSearched) { // only auto-search if not manually submitted yet, or adjust logic
-       // Let's disable automatic search on type for now to rely on button click to avoid excessive API calls.
-       // If you want auto-search on type, uncomment the line below and adjust logic for manual search.
-       // performSearch(debouncedSearchTerm, 1);
-     } else if (debouncedSearchTerm.trim() === '') {
-       setResults([]);
-       setHasSearched(false);
-       setHasNextPage(false);
-       setCurrentPage(1);
-     }
-   }, [debouncedSearchTerm]);
+  // useEffect(() => {
+  //   if (debouncedSearchTerm.trim() !== '') { 
+  //     performSearch(debouncedSearchTerm, 1);
+  //   } else if (debouncedSearchTerm.trim() === '') {
+  //     setResults([]);
+  //     setHasSearched(false);
+  //     setHasNextPage(false);
+  //     setCurrentPage(1);
+  //   }
+  // }, [debouncedSearchTerm]);
 
 
   const handleLoadMore = () => {
@@ -77,6 +80,16 @@ export function SearchComponent() {
       performSearch(searchTerm, currentPage + 1);
     }
   };
+  
+  // Effect to clear results if search term becomes empty after a search has been made
+  useEffect(() => {
+    if (searchTerm.trim() === '' && hasSearched) { 
+      setResults([]);
+      setHasSearched(false);
+      setHasNextPage(false);
+      setCurrentPage(1);
+    }
+  }, [searchTerm, hasSearched]);
 
   return (
     <div className="space-y-8">
@@ -88,9 +101,13 @@ export function SearchComponent() {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              // If you want results to clear immediately on input change before debounce/submit:
-              // setResults([]); 
-              // setHasSearched(false);
+              // If search term is cleared, reset search state immediately
+              if (e.target.value.trim() === '') {
+                setResults([]);
+                setHasSearched(false);
+                setHasNextPage(false);
+                setCurrentPage(1);
+              }
             }}
             className="pr-10 text-base"
           />
@@ -113,20 +130,20 @@ export function SearchComponent() {
             </Button>
           )}
         </div>
-        <Button type="submit" variant="default" size="lg" disabled={isLoading}>
-          {isLoading && results.length === 0 ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
+        <Button type="submit" variant="default" size="lg" disabled={isLoading && searchTerm.trim() !== ''}>
+          {isLoading && searchTerm.trim() !== '' && results.length === 0 ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
           Search
         </Button>
       </form>
 
-      {isLoading && results.length === 0 && (
+      {isLoading && results.length === 0 && searchTerm.trim() !== '' && (
         <div className="text-center py-10">
           <Loader2 className="mx-auto h-12 w-12 text-primary animate-spin mb-4" />
           <p className="text-xl text-muted-foreground">Searching...</p>
         </div>
       )}
 
-      {hasSearched && !isLoading && results.length === 0 && (
+      {hasSearched && !isLoading && results.length === 0 && searchTerm.trim() !== '' && (
         <div className="text-center py-10">
           <SearchIcon className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
           <p className="text-xl text-muted-foreground">No results found for "{searchTerm}".</p>
@@ -136,8 +153,8 @@ export function SearchComponent() {
 
       {results.length > 0 && (
         <>
-          <h2 className="text-2xl font-semibold mb-6">Search Results ({results.length}{hasNextPage ? '+' : ''})</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <h2 className="text-2xl font-semibold">Search Results ({results.length}{hasNextPage ? '+' : ''})</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-6">
             {results.map((anime) => (
               <AnimeCard key={anime.id} anime={anime} />
             ))}
@@ -153,7 +170,7 @@ export function SearchComponent() {
         </>
       )}
       
-      {!hasSearched && !isLoading && results.length === 0 && searchTerm === '' && (
+      {!hasSearched && !isLoading && results.length === 0 && searchTerm.trim() === '' && (
          <div className="text-center py-10">
             <SearchIcon className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
             <p className="text-xl text-muted-foreground">Start searching for your favorite anime!</p>
@@ -162,32 +179,3 @@ export function SearchComponent() {
     </div>
   );
 }
-
-// A simple debounce hook (can be moved to a separate file like src/hooks/use-debounce.ts)
-// If you don't have one, create it:
-// import { useState, useEffect } from 'react';
-// export function useDebounce<T>(value: T, delay: number): T {
-//   const [debouncedValue, setDebouncedValue] = useState<T>(value);
-//   useEffect(() => {
-//     const handler = setTimeout(() => {
-//       setDebouncedValue(value);
-//     }, delay);
-//     return () => {
-//       clearTimeout(handler);
-//     };
-//   }, [value, delay]);
-//   return debouncedValue;
-// }
-// For now, this component will not use auto-search via debounce to simplify.
-// If useDebounce is not available, the useEffect block using it should be removed or adapted.
-// Since useDebounce is not in the current file list, I'll remove its usage for now and rely on manual search.
-// Re-adding a simpler useEffect for clearing search if input is empty.
-useEffect(() => {
-    if (searchTerm.trim() === '' && hasSearched) { // if search term cleared after a search
-      setResults([]);
-      setHasSearched(false);
-      setHasNextPage(false);
-      setCurrentPage(1);
-    }
-  }, [searchTerm, hasSearched]);
-
