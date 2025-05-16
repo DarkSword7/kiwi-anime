@@ -2,8 +2,9 @@
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
-import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import { MediaPlayer, MediaProvider, type MediaProviderAdapter } from '@vidstack/react';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
+import type { HlsProvider } from '@vidstack/react/providers/hls'; // Import HlsProvider type
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
 import type { StreamingLinks, AnimeInfo, StreamingSource } from '@/types/anime';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -46,18 +47,19 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
   const [isLoading, setIsLoading] = useState(true);
   const [selectedServer, setSelectedServer] = useState<string>('vidstreaming'); 
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
+  const [hlsProviderInstance, setHlsProviderInstance] = useState<HlsProvider | null>(null);
+
 
   const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape"]; 
 
   console.log(`[WatchPageContent] Initializing for episodeId: ${episodeIdFromParams}, animeId: ${animeId}`);
    if (!episodeIdFromParams) {
       console.warn("[WatchPageContent] Initialization aborted: episodeIdFromParams is missing.");
-      // Potentially set an error state here if needed, or rely on useEffect to handle it.
   }
 
   useEffect(() => {
     async function fetchData() {
-      console.log(`[WatchPageContent] fetchData triggered. episodeIdFromParams: ${episodeIdFromParams}, selectedServer: ${selectedServer}`);
+      console.log(`[WatchPageContent] fetchData triggered. episodeId: ${episodeIdFromParams}, selectedServer: ${selectedServer}`);
       if (!episodeIdFromParams) {
           setError("Episode ID is missing.");
           setIsLoading(false);
@@ -66,8 +68,9 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
       }
       setIsLoading(true);
       setError(null);
-      setStreamingInfo(null); // Reset previous streaming info
-      setSelectedQuality(undefined); // Reset previous quality
+      setStreamingInfo(null); 
+      setSelectedQuality(undefined); 
+      // setHlsProviderInstance(null); // Reset HLS provider instance if needed, though Vidstack might handle re-init
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromParams, selectedServer); 
@@ -75,11 +78,14 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
 
         if (links && links.sources && links.sources.length > 0) {
           setStreamingInfo(links);
-          const defaultQualitySource = links.sources.find(s => s.quality === 'default' || s.quality === 'auto');
+          const defaultQualitySource = links.sources.find(s => s.quality === 'default' || s.quality === 'auto' || s.quality?.toLowerCase().includes('auto'));
           const firstSource = links.sources[0];
           const qualityToSet = defaultQualitySource?.quality || firstSource?.quality;
           setSelectedQuality(qualityToSet);
           console.log("[WatchPageContent] Streaming links found. Sources count:", links.sources.length, "Selected quality set to:", qualityToSet);
+          if (links.headers) {
+            console.log("[WatchPageContent] Headers received from API:", links.headers);
+          }
         } else {
           const errorMsg = `No streaming links found for this episode on server '${selectedServer}'. This could be due to the episode not being available, or an API issue. Try another server.`;
           setError(errorMsg);
@@ -106,6 +112,35 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
     fetchData();
   }, [episodeIdFromParams, animeId, selectedServer]); 
 
+  useEffect(() => {
+    if (hlsProviderInstance && streamingInfo?.headers && currentSource?.isM3U8) {
+      const apiHeaders = { ...streamingInfo.headers };
+      // Remove null/undefined headers and filter for common ones if necessary
+      Object.keys(apiHeaders).forEach(key => {
+        if (apiHeaders[key] == null) {
+          delete apiHeaders[key];
+        }
+      });
+
+      if (Object.keys(apiHeaders).length > 0) {
+        console.log('[WatchPageContent] Configuring HLS provider with custom headers:', apiHeaders);
+        hlsProviderInstance.config = {
+          ...hlsProviderInstance.config, // Preserve existing HLS config
+          xhrSetup: (xhr: XMLHttpRequest, url: string) => {
+            console.log(`[WatchPageContent] HLS xhrSetup for ${url}. Applying headers:`, apiHeaders);
+            for (const headerKey in apiHeaders) {
+              // Ensure headerKey is a valid property of apiHeaders
+              if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
+                 xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
+              }
+            }
+          }
+        };
+      }
+    }
+  }, [hlsProviderInstance, streamingInfo, currentSource]);
+
+
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
     setSelectedServer(newServer);
@@ -126,12 +161,11 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
     let url = currentSource.url;
     // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
     if (url.startsWith('http') && !url.includes('consumet.stream/') && !url.includes('animefreestream.vercel.app/')) {
-        // Ensure no double slashes if CORS_PROXY_URL ends with / and url starts with / (though url here should be absolute)
         const fullUrl = new URL(url); 
         url = `${CORS_PROXY_URL}${fullUrl.protocol}//${fullUrl.host}${fullUrl.pathname}${fullUrl.search}${fullUrl.hash}`;
-        console.log("[WatchPageContent] Using CORS proxied URL for player:", url);
+        console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
     } else {
-        console.log("[WatchPageContent] Using original URL for player (not proxying):", url);
+        console.log("[WatchPageContent] Using original URL for player manifest (not proxying):", url);
     }
     return url;
   }, [currentSource]);
@@ -156,7 +190,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
 
-  if (isLoading && !streamingInfo) { // Show main loader only if we don't have any info yet
+  if (isLoading && !streamingInfo) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
         <Loader2 className="w-16 h-16 text-primary animate-spin mb-4" />
@@ -205,7 +239,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
             <Select 
                 value={selectedQuality || streamingInfo.sources[0]?.quality || 'default'} 
                 onValueChange={setSelectedQuality}
-                disabled={isLoading}
+                disabled={isLoading || !streamingInfo || streamingInfo.sources.length === 0}
             >
                 <SelectTrigger className="w-[120px] h-9">
                     <SelectValue placeholder="Quality"/>
@@ -213,7 +247,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
                 <SelectContent>
                     {streamingInfo.sources.map(source => (
                         <SelectItem key={source.quality || 'default'} value={source.quality || 'default'}>
-                            {source.quality || 'Default'} ({source.url.includes('.m3u8') ? 'HLS' : 'MP4'})
+                            {source.quality || 'Default'} {source.isM3U8 ? '(HLS)' : '(MP4)'}
                         </SelectItem>
                     ))}
                 </SelectContent>
@@ -240,6 +274,15 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
           crossOrigin
           playsInline
+          onProviderChange={(event) => {
+            const provider = event.detail;
+            if (provider?.type === 'hls') {
+              console.log("[WatchPageContent] HLS provider initialized/changed.");
+              setHlsProviderInstance(provider as HlsProvider);
+            } else {
+              setHlsProviderInstance(null);
+            }
+          }}
         >
           <MediaProvider />
           <DefaultVideoLayout icons={defaultLayoutIcons} />
@@ -251,7 +294,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
             <p className="text-muted-foreground">Video source not available. Please try a different server or check back later.</p>
          </div>
       )}
-       {isLoading && !streamingInfo && !error && ( /* Loader specifically when changing servers and currentSource isn't ready */
+       {isLoading && !playerSrcUrl && !streamingInfo && !error && ( 
          <div className="my-6 p-6 bg-muted rounded-md text-center flex flex-col items-center justify-center aspect-video">
             <Loader2 className="w-12 h-12 text-primary animate-spin mb-3" />
             <p className="text-muted-foreground">Fetching new video source...</p>
@@ -291,5 +334,3 @@ export default function WatchPage({ params }: WatchPageServerProps) {
     </Suspense>
   );
 }
-
-    
