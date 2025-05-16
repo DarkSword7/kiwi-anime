@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { AnimeSearchResult } from '@/types/anime';
@@ -7,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, X, Loader2 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
-// import { useDebounce } from '@/hooks/use-debounce'; // Debounce hook is available if needed
 
 export function SearchComponent() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,12 +17,10 @@ export function SearchComponent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
 
-  // const debouncedSearchTerm = useDebounce(searchTerm, 500); // If using debounce
-
   const performSearch = async (term: string, page: number = 1) => {
     if (term.trim() === '') {
       setResults([]);
-      setHasSearched(true);
+      setHasSearched(true); // Or false, depending on desired UX for empty search
       setHasNextPage(false);
       setIsLoading(false);
       setCurrentPage(1);
@@ -30,50 +28,42 @@ export function SearchComponent() {
     }
 
     setIsLoading(true);
-    // setHasSearched(false); // Keep true if loading more, reset only for new term
     if (page === 1) {
-      setHasSearched(false); // Reset for new search term
+      setHasSearched(false); 
     }
     
     try {
       const searchData = await searchAnime(term, page);
+      
+      // Safely access properties, providing defaults if searchData or its properties are null/undefined
+      const newApiResults = searchData?.results || [];
+      const apiCurrentPage = searchData?.currentPage || page;
+      const apiHasNextPage = !!searchData?.hasNextPage; // Ensure boolean
+
       if (page === 1) {
-        setResults(searchData.results);
+        setResults(newApiResults);
       } else {
-        setResults(prevResults => [...prevResults, ...searchData.results]);
+        // prevResults should always be an array due to useState initialization
+        setResults(prevResults => [...prevResults, ...newApiResults]);
       }
-      setCurrentPage(searchData.currentPage || page);
-      setHasNextPage(searchData.hasNextPage);
+      setCurrentPage(apiCurrentPage);
+      setHasNextPage(apiHasNextPage);
     } catch (error) {
       console.error("Search failed:", error);
-      setResults([]); // Clear results on error
+      setResults([]);
       setHasNextPage(false);
-      // Optionally, set an error state to display to the user
+      // Optionally reset current page or display a more specific error message
     } finally {
       setIsLoading(false);
       setHasSearched(true);
     }
   };
 
-  // Search on form submit
   const handleSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setCurrentPage(1); // Reset to first page on new manual search
+    setCurrentPage(1); 
     performSearch(searchTerm, 1);
   };
-
-  // Optional: Debounced search as user types (triggered by debouncedSearchTerm change)
-  // useEffect(() => {
-  //   if (debouncedSearchTerm.trim() !== '') { 
-  //     performSearch(debouncedSearchTerm, 1);
-  //   } else if (debouncedSearchTerm.trim() === '') {
-  //     setResults([]);
-  //     setHasSearched(false);
-  //     setHasNextPage(false);
-  //     setCurrentPage(1);
-  //   }
-  // }, [debouncedSearchTerm]);
-
 
   const handleLoadMore = () => {
     if (hasNextPage && !isLoading) {
@@ -81,7 +71,6 @@ export function SearchComponent() {
     }
   };
   
-  // Effect to clear results if search term becomes empty after a search has been made
   useEffect(() => {
     if (searchTerm.trim() === '' && hasSearched) { 
       setResults([]);
@@ -101,7 +90,6 @@ export function SearchComponent() {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              // If search term is cleared, reset search state immediately
               if (e.target.value.trim() === '') {
                 setResults([]);
                 setHasSearched(false);
@@ -131,12 +119,12 @@ export function SearchComponent() {
           )}
         </div>
         <Button type="submit" variant="default" size="lg" disabled={isLoading && searchTerm.trim() !== ''}>
-          {isLoading && searchTerm.trim() !== '' && results.length === 0 ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
+           {isLoading && searchTerm.trim() !== '' && results.length === 0 && page === 1 ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
           Search
         </Button>
       </form>
 
-      {isLoading && results.length === 0 && searchTerm.trim() !== '' && (
+      {isLoading && results.length === 0 && searchTerm.trim() !== '' && currentPage === 1 && (
         <div className="text-center py-10">
           <Loader2 className="mx-auto h-12 w-12 text-primary animate-spin mb-4" />
           <p className="text-xl text-muted-foreground">Searching...</p>
