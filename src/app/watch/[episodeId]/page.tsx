@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
@@ -274,11 +275,16 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
           crossOrigin
           playsInline
           onProviderChange={(event) => {
-            const provider = event.detail;
-            if (provider?.type === 'hls') {
-              console.log("[WatchPageContent] HLS provider initialized/changed.");
-              setHlsProviderInstance(provider as HlsProvider);
+            if (event && event.detail) {
+              const provider = event.detail;
+              if (provider?.type === 'hls') {
+                console.log("[WatchPageContent] HLS provider initialized/changed.");
+                setHlsProviderInstance(provider as HlsProvider);
+              } else {
+                setHlsProviderInstance(null);
+              }
             } else {
+              console.warn("[WatchPageContent] onProviderChange event or event.detail is null.");
               setHlsProviderInstance(null);
             }
           }}
