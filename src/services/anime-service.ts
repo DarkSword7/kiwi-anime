@@ -4,7 +4,7 @@
 import axios from 'axios';
 import type { AnimeSearchResult, AnimeInfo, Episode, StreamingLinks } from '@/types/anime';
 
-const API_BASE_URL = 'https://animefreestream.vercel.app'; // Changed to new self-hosted URL
+const API_BASE_URL = 'https://animefreestream.vercel.app'; // User's self-hosted Consumet API
 
 // Centralized error logging for API calls
 const logApiError = (error: any, context: string, requestUrl: string, queryParams?: object) => {
@@ -14,31 +14,27 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
   }
 
   if (error.response) {
-    let responseDataString: string;
-    const rawData = error.response.data;
-
-    if (typeof rawData === 'string') {
-      if (rawData.trim().startsWith('<!DOCTYPE html>') || rawData.trim().startsWith('<html')) {
-        responseDataString = '[HTML Response - Truncated]';
+    let responseData: any = error.response.data;
+    if (typeof responseData === 'string') {
+      if (responseData.trim().startsWith('<!DOCTYPE html>') || responseData.trim().startsWith('<html')) {
+        responseData = '[HTML Response - Truncated]';
       } else {
-        responseDataString = rawData.substring(0, 500); // Log first 500 chars
-        if (rawData.length > 500) {
-          responseDataString += '... [Truncated]';
-        }
+        // Truncate long non-HTML strings as well
+        responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated]' : '');
       }
-    } else if (typeof rawData === 'object' && rawData !== null) {
+    } else if (typeof responseData === 'object' && responseData !== null) {
+      // Attempt to stringify, but catch if it's too complex or circular (though less likely now)
       try {
-        responseDataString = JSON.stringify(rawData, null, 2);
+        responseData = JSON.stringify(responseData, null, 2);
       } catch (e) {
-        // Handle potential circular structures in non-HTML object responses
-        responseDataString = '[Unserializable Object Response]';
+        responseData = '[Unserializable Object Response]';
       }
-    } else if (rawData === undefined) {
-        responseDataString = '[No Response Data (undefined)]';
+    } else if (responseData === undefined) {
+        responseData = '[No Response Data (undefined)]';
     } else {
-        responseDataString = `[Unexpected Response Data Type: ${typeof rawData}]`;
+        responseData = `[Unexpected Response Data Type: ${typeof responseData}]`;
     }
-    console.error(`${message}. Status: ${error.response.status}, Data: ${responseDataString}`);
+    console.error(`${message}. Status: ${error.response.status}, Data:`, responseData);
   } else if (error.request) {
     console.error(`${message}. No response received. Code: ${error.code || 'N/A'}, Message: ${error.message}`);
   } else {
@@ -48,8 +44,7 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
 
 export async function searchAnime(query: string, page: number = 1): Promise<{ currentPage: number, hasNextPage: boolean, results: AnimeSearchResult[] }> {
   const context = 'searchAnime';
-  // Assuming the new API uses the query directly in the path like Gogoanime provider
-  const requestUrl = `${API_BASE_URL}/${encodeURIComponent(query)}`;
+  const requestUrl = `${API_BASE_URL}/anime/9anime/${encodeURIComponent(query)}`;
   
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { page });
 
@@ -76,8 +71,7 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
 
 export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
   const context = 'getAnimeInfo';
-  // Assuming the new API uses /info/:id like Gogoanime provider
-  const requestUrl = `${API_BASE_URL}/info/${id}`;
+  const requestUrl = `${API_BASE_URL}/anime/9anime/info/${id}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}`);
 
@@ -92,7 +86,7 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
     let title = 'Unknown Title';
     if (data.title && typeof data.title === 'string') {
         title = data.title;
-    } else if (data.title && typeof data.title.romaji === 'string') {
+    } else if (data.title && typeof data.title.romaji === 'string') { // Some providers use nested title objects
         title = data.title.romaji;
     } else if (data.title && typeof data.title.english === 'string') {
         title = data.title.english;
@@ -109,7 +103,7 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
     
     return {
         ...data,
-        id: String(data.id || id),
+        id: String(data.id || id), // Ensure id is always a string
         title: title,
         episodes,
     } as AnimeInfo;
@@ -125,14 +119,13 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
 
 export async function getEpisodeStreamingLinks(episodeId: string, server: string = 'vidstreaming'): Promise<StreamingLinks | null> {
   const context = 'getEpisodeStreamingLinks';
-  // Assuming the new API uses /watch/:episodeId like Gogoanime provider
-  const requestUrl = `${API_BASE_URL}/watch/${episodeId}`;
+  const requestUrl = `${API_BASE_URL}/anime/9anime/watch/${episodeId}`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { server });
   
   try {
     const { data } = await axios.get(requestUrl, {
-      params: { server },
+      params: { server }, // The API expects 'server' as a query param
     });
 
     if (typeof data === 'object' && data !== null && Array.isArray(data.sources)) {
@@ -157,17 +150,18 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
   }
 }
 
+// For Trending and Popular, we use the generic Consumet endpoints, assuming the self-hosted API supports them.
+// If these need to be 9anime specific and such endpoints exist for 9anime, these URLs would need adjustment.
 export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
   const context = 'getTrendingAnimeList (using /top-airing)';
-  // Assuming the new API uses /top-airing like Gogoanime provider
-  const requestUrl = `${API_BASE_URL}/top-airing`;
+  const requestUrl = `${API_BASE_URL}/top-airing`; // Generic endpoint
   console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
   
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (Array.isArray(data)) { // Some APIs might return array directly
+      return (data.results || []).slice(0, 8) as AnimeSearchResult[]; // Limit to 8 for homepage
+    } else if (Array.isArray(data)) { 
       return (data || []).slice(0, 8) as AnimeSearchResult[];
     } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
@@ -181,15 +175,14 @@ export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearc
 
 export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
   const context = 'getPopularAnimeList (using /popular)';
-  // Assuming the new API uses /popular like Gogoanime provider
-  const requestUrl = `${API_BASE_URL}/popular`;
+  const requestUrl = `${API_BASE_URL}/popular`; // Generic endpoint
   console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
 
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (Array.isArray(data)) { // Some APIs might return array directly
+      return (data.results || []).slice(0, 8) as AnimeSearchResult[]; // Limit to 8 for homepage
+    } else if (Array.isArray(data)) { 
       return (data || []).slice(0, 8) as AnimeSearchResult[];
     } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
