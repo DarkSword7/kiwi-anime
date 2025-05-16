@@ -16,14 +16,30 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
   if (error.response) {
     // The request was made and the server responded with a status code
     // that falls out of the range of 2xx
-    let responseData = error.response.data;
-    if (typeof responseData === 'string' && responseData.trim().startsWith('<!DOCTYPE html>')) {
-      responseData = '[HTML Response - Truncated]';
-    } else if (typeof responseData === 'object') {
-      // If it's an object, it might be a JSON error from the API, which is fine to log
-      responseData = JSON.stringify(responseData, null, 2);
+    let responseDataString: string;
+    const rawData = error.response.data;
+
+    if (typeof rawData === 'string') {
+      if (rawData.trim().startsWith('<!DOCTYPE html>')) {
+        responseDataString = '[HTML Response - Truncated]';
+      } else {
+        responseDataString = rawData.substring(0, 500); // Log first 500 chars
+        if (rawData.length > 500) {
+          responseDataString += '... [Truncated]';
+        }
+      }
+    } else if (typeof rawData === 'object' && rawData !== null) {
+      try {
+        responseDataString = JSON.stringify(rawData, null, 2);
+      } catch (e) {
+        responseDataString = '[Unserializable Object Response]';
+      }
+    } else if (rawData === undefined) {
+        responseDataString = '[No Response Data (undefined)]';
+    } else {
+        responseDataString = `[Unexpected Response Data Type: ${typeof rawData}]`;
     }
-    console.error(`${message}. Status: ${error.response.status}, Data:`, responseData);
+    console.error(`${message}. Status: ${error.response.status}, Data: ${responseDataString}`);
   } else if (error.request) {
     // The request was made but no response was received
     // Avoid logging error.request directly due to circular structures
@@ -75,16 +91,30 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
       return null;
     }
     
-    if (typeof data.id !== 'string' || typeof (data.title?.romaji || data.title?.english || data.title) !== 'string') {
-        console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Missing id or title. Data:`, data);
-        return null;
+    // Ensure title is properly extracted even if it's nested
+    let title = 'Unknown Title';
+    if (data.title && typeof data.title === 'string') {
+        title = data.title;
+    } else if (data.title && typeof data.title.romaji === 'string') {
+        title = data.title.romaji;
+    } else if (data.title && typeof data.title.english === 'string') {
+        title = data.title.english;
+    } else if (data.title && typeof data.title.native === 'string') {
+        title = data.title.native;
+    }
+
+
+    if (typeof data.id !== 'string' && typeof data.id !== 'number') { // ID can sometimes be a number from anilist
+        console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Missing or invalid id. Data:`, data);
+        // Allow proceeding if title is present, using provided id if possible or a placeholder
+        if (!id && !(data.id)) return null; 
     }
     
     const episodes = Array.isArray(data.episodes) ? data.episodes : [];
-    const title = data.title?.romaji || data.title?.english || data.title;
-
+    
     return {
         ...data,
+        id: String(data.id || id), // Ensure id is a string
         title: title,
         episodes,
     } as AnimeInfo;
@@ -172,4 +202,3 @@ export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearch
     return [];
   }
 }
-
