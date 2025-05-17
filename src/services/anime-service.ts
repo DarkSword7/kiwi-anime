@@ -21,14 +21,12 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
         responseData = '[HTML Response - Truncated]';
       } else {
         try {
-          // Attempt to parse if it's a JSON string
           const parsedJson = JSON.parse(responseData);
           responseData = JSON.stringify(parsedJson, null, 2);
           if (responseData.length > 1000) {
              responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
           }
         } catch (e) {
-          // Not JSON, truncate if very long
           responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated String]' : '');
         }
       }
@@ -175,9 +173,9 @@ export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearc
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (data && Array.isArray(data)) { 
-        return (data || []).slice(0,8) as AnimeSearchResult[];
+      return (data.results || []) as AnimeSearchResult[];
+    } else if (data && Array.isArray(data)) { // Some Consumet endpoints might return array directly
+        return (data || []) as AnimeSearchResult[];
     }
      else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
@@ -196,11 +194,32 @@ export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearch
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
      if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (data && Array.isArray(data)) { 
-        return (data || []).slice(0,8) as AnimeSearchResult[];
+      return (data.results || []) as AnimeSearchResult[];
+    } else if (data && Array.isArray(data)) {
+        return (data || []) as AnimeSearchResult[];
     }
      else {
+      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      return [];
+    }
+  } catch (error: any) {
+    logApiError(error, context, requestUrl, { page });
+    return [];
+  }
+}
+
+export async function getRecentEpisodesList(page: number = 1): Promise<AnimeSearchResult[]> {
+  const context = 'getRecentEpisodesList (Zoro /recent-episodes)';
+  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/recent-episodes`;
+  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
+  try {
+    const { data } = await axios.get(requestUrl, { params: { page } });
+    // Assuming the structure is similar to search results or popular/trending
+    if (data && Array.isArray(data.results)) {
+      return (data.results || []) as AnimeSearchResult[];
+    } else if (data && Array.isArray(data)) { // Fallback if it's a direct array
+        return (data || []) as AnimeSearchResult[];
+    } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
       return [];
     }
