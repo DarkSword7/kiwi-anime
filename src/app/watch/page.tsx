@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
-import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import { MediaPlayer, MediaProvider, type MediaProviderAdapter } from '@vidstack/react';
 import type { HlsProvider } from '@vidstack/react/providers/hls';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
@@ -63,7 +63,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined); 
-      // setHlsProviderInstance(null); // Cleared on server change or episode navigation
+      setHlsProviderInstance(null); // Reset HLS provider instance on new fetch
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -89,7 +89,7 @@ function WatchPageContent({}: WatchPageContentProps) {
         } else {
           const errorMsg = `No streaming links found for episode ${episodeIdFromQuery} on server '${selectedServer}'. This could be due to the episode not being available, an API issue, or the server not being supported for this provider. Try another server.`;
           setError(errorMsg);
-          setStreamingInfo(null); // Ensure streamingInfo is null if no links
+          setStreamingInfo(null); 
           console.warn("[WatchPageContent] No streaming links found or sources array is empty. Error set:", errorMsg);
         }
 
@@ -103,7 +103,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       } catch (e: any) {
         console.error("[WatchPageContent] Error in fetchData:", e);
         setError(e.message || `Could not load video information for server '${selectedServer}'. Please try again or select a different server.`);
-        setStreamingInfo(null); // Ensure streamingInfo is null on error
+        setStreamingInfo(null); 
       } finally {
         setIsLoading(false);
         console.log("[WatchPageContent] fetchData finished. isLoading set to false.");
@@ -112,9 +112,9 @@ function WatchPageContent({}: WatchPageContentProps) {
     if (episodeIdFromQuery) { 
         fetchData();
     } else {
-        setIsLoading(false); // Not loading if no episodeId
+        setIsLoading(false); 
     }
-  }, [episodeIdFromQuery, animeId, selectedServer]); // Effect dependencies
+  }, [episodeIdFromQuery, animeId, selectedServer]); 
 
 
   const currentSource = useMemo(() => {
@@ -122,7 +122,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       console.log("[WatchPageContent] currentSource derived: undefined (no streamingInfo or sources)");
       return undefined;
     }
-    // Prefer selectedQuality, then default, then first source
+    
     const sourceByQuality = selectedQuality ? streamingInfo.sources.find(s => s.quality === selectedQuality) : undefined;
     const defaultSource = streamingInfo.sources.find(s => s.quality?.toLowerCase() === 'default' || s.quality?.toLowerCase() === 'auto') || streamingInfo.sources[0];
     
@@ -139,7 +139,6 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
-    // Apply new CORS proxy if it's an http/https URL and not already proxied by ciphertv or from our own API domain
     if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev/') && !url.includes('animefreestream.vercel.app/')) {
         url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
         console.log("[WatchPageContent] Using CipherTV CORS proxied URL for player manifest:", url);
@@ -151,55 +150,53 @@ function WatchPageContent({}: WatchPageContentProps) {
 
 
   useEffect(() => {
-    console.log(`[WatchPageContent] HLS Effect Triggered. hlsProviderInstance: ${hlsProviderInstance ? "Exists" : "null"}, streamingInfo.headers: ${streamingInfo?.headers ? JSON.stringify(streamingInfo.headers) : "null"}, currentSource.isM3U8: ${currentSource?.isM3U8}`);
-    
-    if (!hlsProviderInstance) {
-        if(currentSource?.isM3U8 && streamingInfo?.headers){
-             console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers YET. Waiting for provider instance to be set via onProviderChange.');
-        }
-        return;
+    console.log(
+      `[WatchPageContent] HLS Effect. Provider: ${hlsProviderInstance ? 'Yes' : 'No'}, Headers: ${streamingInfo?.headers ? 'Yes' : 'No'}, Source URL: ${currentSource?.url ? 'Yes' : 'No'}, IsM3U8: ${currentSource?.isM3U8}`
+    );
+  
+    if (!hlsProviderInstance || !currentSource?.isM3U8) {
+      if (hlsProviderInstance?.config?.xhrSetup) {
+        console.log('[WatchPageContent] Clearing HLS xhrSetup (no M3U8 source or no provider).');
+        delete hlsProviderInstance.config.xhrSetup;
+      }
+      return;
     }
-
-    // Ensure hlsProviderInstance.config exists
+  
     if (!hlsProviderInstance.config) {
+      console.warn('[WatchPageContent] HLS provider instance.config is unexpectedly null/undefined. Initializing.');
       hlsProviderInstance.config = {};
     }
-
-    if (streamingInfo?.headers && currentSource?.isM3U8 && Object.keys(streamingInfo.headers).length > 0) {
+  
+    if (streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0) {
       const apiHeaders = { ...streamingInfo.headers };
-      
-      Object.keys(apiHeaders).forEach(key => { // Remove null/undefined headers
-        if (apiHeaders[key] == null) { 
-          delete apiHeaders[key];
-        }
+      Object.keys(apiHeaders).forEach((key) => {
+        if (apiHeaders[key] == null) delete apiHeaders[key];
       });
-
+  
       if (Object.keys(apiHeaders).length > 0) {
-        console.log('[WatchPageContent] Configuring HLS provider WITH custom headers:', JSON.stringify(apiHeaders));
-        
-        hlsProviderInstance.config.xhrSetup = (xhr: XMLHttpRequest, requestUrl: string) => {
-          console.log(`[WatchPageContent] HLS xhrSetup for URL: ${requestUrl}. Applying headers:`, JSON.stringify(apiHeaders));
+        console.log('[WatchPageContent] APPLYING HLS xhrSetup with headers:', JSON.stringify(apiHeaders));
+        hlsProviderInstance.config.xhrSetup = (xhr, requestUrl) => {
+          console.log(`[HLS xhrSetup] Applying to ${requestUrl}:`, JSON.stringify(apiHeaders));
           for (const headerKey in apiHeaders) {
             if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
-               xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
-               console.log(`[WatchPageContent] HLS xhrSetup: Set header '${headerKey}': '${apiHeaders[headerKey]}' for ${requestUrl}`);
+              xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
             }
           }
         };
-        console.log('[WatchPageContent] HLS provider xhrSetup configured.');
       } else {
-        console.log('[WatchPageContent] No valid custom headers found in streamingInfo.headers to apply. Clearing previous HLS xhrSetup if any.');
-        if (hlsProviderInstance.config?.xhrSetup) {
-            delete hlsProviderInstance.config.xhrSetup; 
+        if (hlsProviderInstance.config.xhrSetup) {
+          console.log('[WatchPageContent] Clearing HLS xhrSetup (no valid API headers).');
+          delete hlsProviderInstance.config.xhrSetup;
         }
       }
     } else {
-        console.log('[WatchPageContent] Conditions for HLS custom headers not met (not M3U8, or no API headers, or no HLS provider instance). Clearing previous HLS xhrSetup if any.');
-        if (hlsProviderInstance.config?.xhrSetup) {
-            delete hlsProviderInstance.config.xhrSetup; 
-        }
+      if (hlsProviderInstance.config.xhrSetup) {
+        console.log('[WatchPageContent] Clearing HLS xhrSetup (no streamingInfo.headers).');
+        delete hlsProviderInstance.config.xhrSetup;
+      }
     }
-  }, [hlsProviderInstance, streamingInfo, currentSource]); 
+  }, [hlsProviderInstance, streamingInfo, currentSource]);
+  
 
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
@@ -328,18 +325,14 @@ function WatchPageContent({}: WatchPageContentProps) {
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
           crossOrigin 
           playsInline
-          onProviderChange={(event) => {
-            if (event && event.detail) { 
-              const provider = event.detail;
-              if (provider?.type === 'hls') {
-                console.log("[WatchPageContent] HLS provider instance obtained from onProviderChange:", provider);
-                setHlsProviderInstance(provider as HlsProvider);
-              } else {
-                console.log("[WatchPageContent] Non-HLS provider from onProviderChange:", provider, "Clearing HLS instance.");
-                setHlsProviderInstance(null); 
-              }
+          onProviderChange={(provider: MediaProviderAdapter | null) => { // Corrected callback signature
+            if (provider && provider.type === 'hls') {
+              console.log("[WatchPageContent] HLS provider instance obtained from onProviderChange:", provider);
+              setHlsProviderInstance(provider as HlsProvider);
             } else {
-              console.warn("[WatchPageContent] onProviderChange event or event.detail is null/undefined. Clearing HLS instance.");
+              if (hlsProviderInstance) { 
+                console.log("[WatchPageContent] Non-HLS or null provider from onProviderChange. Clearing HLS instance. Provider was:", provider);
+              }
               setHlsProviderInstance(null); 
             }
           }}
