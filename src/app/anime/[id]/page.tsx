@@ -1,3 +1,4 @@
+
 import { getAnimeInfo } from '@/services/anime-service';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -129,7 +130,7 @@ export default async function AnimeDetailsPage({ params }: AnimeDetailsPageProps
               </h2>
               <div className="max-h-96 overflow-y-auto space-y-2 pr-2 rounded-md border p-4 bg-background/50">
                 {anime.episodes.map((episode: Episode) => (
-                  <Link key={episode.id} href={`/watch/${episode.id}?animeId=${anime.id}&epNum=${episode.number}`} passHref>
+                  <Link key={episode.id} href={`/watch?ep=${encodeURIComponent(episode.id)}&animeId=${anime.id}&epNum=${episode.number}`} passHref>
                     <Button variant="ghost" className="w-full justify-start text-left h-auto py-2 px-3 hover:bg-muted">
                        <span className="text-primary font-medium mr-2">Ep {episode.number}:</span>
                        <span className="truncate flex-1">{episode.title || `Episode ${episode.number}`}</span>
