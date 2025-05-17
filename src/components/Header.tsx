@@ -17,7 +17,8 @@ export function Header() {
     e.preventDefault();
     if (searchQuery.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-      // setSearchQuery(''); // Optionally clear input after search
+      // Optionally clear input after search if you want:
+      // setSearchQuery(''); 
     }
   };
 
