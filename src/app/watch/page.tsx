@@ -169,9 +169,8 @@ function WatchPageContent({}: WatchPageContentProps) {
       for (const key in streamingInfo.headers) {
         if (Object.prototype.hasOwnProperty.call(streamingInfo.headers, key)) {
           if (streamingInfo.headers[key]) { 
-             // Filter out browser-restricted headers for client-side XHR
              const lowerKey = key.toLowerCase();
-             if (lowerKey !== 'referer' && lowerKey !== 'user-agent') { // Example: keep Referer and User-Agent out
+             if (lowerKey !== 'referer' && lowerKey !== 'user-agent') {
                 safeHeadersToSet[key] = streamingInfo.headers[key] as string;
              } else {
                 console.warn(`[WatchPageContent] Skipping setting unsafe header '${key}' in HLS xhrSetup.`);
@@ -239,20 +238,25 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
   const getLangCode = (langLabel: string): string => {
-    if (!langLabel) return 'und';
-    const lowerLangLabel = langLabel.toLowerCase().trim();
+    if (!langLabel) return 'und'; // undetermined
+    let lowerLangLabel = langLabel.toLowerCase().trim();
 
-    // Specific cases first (e.g., with region or script)
-    if (lowerLangLabel.includes('portuguese') && (lowerLangLabel.includes('brazil') || lowerLangLabel.includes('cr_portuguese(brazil)'))) return 'pt-BR';
-    if (lowerLangLabel.includes('spanish') && (lowerLangLabel.includes('latin_america') || lowerLangLabel.includes('cr_spanish(latin_america)'))) return 'es-LA';
+    // Handle complex labels like "Language - CR_Language(Region)"
+    const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/); // e.g., (brazil), (latin_america)
+    let region = '';
+    if (regionMatch) {
+      region = regionMatch[1];
+      lowerLangLabel = lowerLangLabel.replace(regionMatch[0], '').trim(); // Remove region part for now
+    }
     
-    // General language name mappings
+    const mainLangPart = lowerLangLabel.split(/[\s-]+/)[0]; // "portuguese" from "portuguese - cr_portuguese"
+
     const langNameMap: { [key: string]: string } = {
       "english": "en", "ingles": "en",
       "spanish": "es", "español": "es",
       "german": "de", "deutsch": "de",
       "french": "fr", "français": "fr",
-      "portuguese": "pt", "português": "pt",
+      "portuguese": "pt", "português": "pt", "portugues": "pt",
       "arabic": "ar", "árabe": "ar",
       "russian": "ru", "русский": "ru",
       "italian": "it", "italiano": "it",
@@ -266,16 +270,21 @@ function WatchPageContent({}: WatchPageContentProps) {
       "chinese": "zh", "中文": "zh",
     };
 
-    // Attempt to match the primary part of the label (e.g., "Arabic" from "Arabic - CR_Arabic")
-    const primaryLangPart = lowerLangLabel.split(/[\s-(CR_]+/)[0];
-    if (langNameMap[primaryLangPart]) return langNameMap[primaryLangPart];
+    let code = langNameMap[mainLangPart] || 'und';
 
-    // Attempt to match known 2 or 3 letter codes directly if the label is short
-    if (lowerLangLabel.length <= 3 && langNameMap[lowerLangLabel]) return langNameMap[lowerLangLabel];
-    if (lowerLangLabel.length === 2 || lowerLangLabel.length === 3) return lowerLangLabel; // Assume it's already a code
-
-    console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted primary: '${primaryLangPart}', falling back to 'und'.`);
-    return 'und'; 
+    if (code === 'pt' && region === 'brazil') {
+      code = 'pt-BR';
+    } else if (code === 'es' && region === 'latin_america') {
+      code = 'es-LA';
+    } else if (code === 'und' && (mainLangPart.length === 2 || mainLangPart.length === 3)) {
+      // If it's a 2 or 3 letter code already, assume it's correct
+      code = mainLangPart;
+    }
+    
+    if (code === 'und') {
+        console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
+    }
+    return code;
   };
 
   const getProxiedSubtitleUrl = (originalUrl: string): string => {
@@ -339,7 +348,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     );
   }
   
-  console.log("[WatchPageContent] About to render MediaPlayer. API-provided subtitles:", JSON.stringify(streamingInfo?.subtitles, null, 2));
+  console.log("[WatchPageContent] About to render MediaPlayer. streamingInfo?.subtitles:", JSON.stringify(streamingInfo?.subtitles, null, 2));
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -425,17 +434,17 @@ function WatchPageContent({}: WatchPageContentProps) {
             }
           }}
           onTextTracksChange={(tracks, event) => { 
-            console.log('[Vidstack] TextTracksChange:', tracks.map(t => ({label: t.label, language: t.language, mode: t.mode, kind: t.kind, id: t.id, srcPresent: !!t.src, type: t.type })));
+            console.log('[Vidstack] TextTracksChange:', tracks.map(t => ({label: t.label, language: t.language, mode: t.mode, kind: t.kind, id: t.id, src: t.src, type: t.type })));
           }}
           onTextTrackChange={(track, event) => { 
-            console.log('[Vidstack] TextTrackChange (selected):', track ? {label: track.label, language: track.language, mode: track.mode, kind: track.kind, id: track.id, srcPresent: !!track.src, type: track.type } : null);
+            console.log('[Vidstack] TextTrackChange (selected):', track ? {label: track.label, language: track.language, mode: track.mode, kind: track.kind, id: track.id, src: track.src, type: track.type } : null);
           }}
         >
           <MediaProvider />
           {streamingInfo?.subtitles?.map((sub) => {
             const trackSrcLang = getLangCode(sub.lang);
             const subtitleUrl = getProxiedSubtitleUrl(sub.url);
-            console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang}, originalUrl=${sub.url}, proxiedUrl=${subtitleUrl}`);
+            console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}, originalUrl=${sub.url}, proxiedUrl=${subtitleUrl}`);
             return (
               <track
                 key={subtitleUrl} 
@@ -443,7 +452,7 @@ function WatchPageContent({}: WatchPageContentProps) {
                 kind="subtitles"
                 label={sub.lang}
                 srcLang={trackSrcLang}
-                default={trackSrcLang === defaultTrackSrcLang}
+                default={trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}
                 crossOrigin="anonymous" 
               />
             );
