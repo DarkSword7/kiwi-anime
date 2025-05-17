@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
@@ -147,7 +148,7 @@ function WatchPageContent({}: WatchPageContentProps) {
         url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
         console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
     } else {
-        console.log("[WatchPageContent] Using original URL for player manifest (no video proxy or already proxied/local):", url);
+        console.log("[WatchPageContent] Using direct URL for player manifest (no video proxy or already proxied/local):", url);
     }
     return url;
   }, [currentSource]);
@@ -161,24 +162,27 @@ function WatchPageContent({}: WatchPageContentProps) {
           const headerValue = streamingInfo.headers[key];
           if (headerValue) { 
              const lowerKey = key.toLowerCase();
-             if (lowerKey !== 'referer' && lowerKey !== 'user-agent') { // Browsers block setting these via XHR for cross-origin
+             // Browsers block setting certain headers like Referer and User-Agent via XHR for cross-origin requests.
+             // It's generally better if the API/proxy handles this, or if the video server doesn't require them.
+             // We can still try to set them, but be aware of browser warnings/blocks.
+             // if (lowerKey !== 'referer' && lowerKey !== 'user-agent') { 
                 safeHeadersToSet[key] = headerValue as string;
-             } else {
-                console.warn(`[WatchPageContent] Skipping setting unsafe/browser-restricted header '${key}' in HLS xhrSetup.`);
-             }
+             // } else {
+             //    console.warn(`[WatchPageContent] Skipping setting potentially unsafe/browser-restricted header '${key}' in HLS xhrSetup.`);
+             // }
           }
         }
       }
 
       if (Object.keys(safeHeadersToSet).length > 0) {
-        console.log('[WatchPageContent] Attempting to configure HLS provider with custom (safe) headers:', JSON.stringify(safeHeadersToSet));
+        console.log('[WatchPageContent] Attempting to configure HLS provider with custom headers:', JSON.stringify(safeHeadersToSet));
         if (!hlsProvider.config) {
           hlsProvider.config = {}; 
         }
-        const previousXhrSetup = hlsProvider.config.xhrSetup; // Store previous to chain if needed
+        const previousXhrSetup = hlsProvider.config.xhrSetup; 
         hlsProvider.config.xhrSetup = (xhr: XMLHttpRequest, requestUrl: string) => {
-            if(previousXhrSetup) previousXhrSetup(xhr, requestUrl); // Chain previous xhrSetup if it existed
-            console.log(`[WatchPageContent] HLS xhrSetup for ${requestUrl}. Applying (safe) headers:`, JSON.stringify(safeHeadersToSet));
+            if(previousXhrSetup) previousXhrSetup(xhr, requestUrl); 
+            console.log(`[WatchPageContent] HLS xhrSetup for ${requestUrl}. Applying headers:`, JSON.stringify(safeHeadersToSet));
             for (const headerKey in safeHeadersToSet) {
               try {
                 xhr.setRequestHeader(headerKey, safeHeadersToSet[headerKey]);
@@ -188,15 +192,13 @@ function WatchPageContent({}: WatchPageContentProps) {
             }
           };
       } else {
-        console.log('[WatchPageContent] No safe API headers to apply to HLS config.');
-        // If no new headers, consider clearing previous xhrSetup if it was set by this logic
-        if (hlsProvider.config?.xhrSetup && !previousXhrSetup) { // Only clear if we set it and now there are no headers
+        console.log('[WatchPageContent] No API headers to apply to HLS config.');
+        if (hlsProvider.config?.xhrSetup) { 
             delete hlsProvider.config.xhrSetup; 
-            console.log('[WatchPageContent] Cleared existing HLS xhrSetup as no new safe headers.');
+            console.log('[WatchPageContent] Cleared existing HLS xhrSetup as no new headers.');
         }
       }
-    } else if (hlsProvider && hlsProvider.config?.xhrSetup && !streamingInfo?.headers && !currentSource?.isM3U8) {
-        // Clear xhrSetup if conditions are no longer met (e.g., source changed to non-HLS or headers removed)
+    } else if (hlsProvider && hlsProvider.config?.xhrSetup && (!streamingInfo?.headers || Object.keys(streamingInfo.headers).length === 0 || !currentSource?.isM3U8)) {
         delete hlsProvider.config.xhrSetup;
         console.log('[WatchPageContent] Cleared existing HLS xhrSetup as conditions not met for applying custom headers.');
     } else if (!hlsProvider) {
@@ -234,37 +236,25 @@ function WatchPageContent({}: WatchPageContentProps) {
     if (!langLabel) return 'und'; // undetermined
     let lowerLangLabel = langLabel.toLowerCase().trim();
 
-    // Handle cases like "thumbnails" or other non-language labels
     if (lowerLangLabel.includes('thumbnails')) {
         console.log(`[WatchPageContent] getLangCode: langLabel '${langLabel}' identified as 'thumbnails', returning 'und'.`);
         return 'und'; 
     }
     
-    // Extract main language part and potential region code
-    let mainLangPart = lowerLangLabel;
-    let regionCode = '';
+    // Match patterns like "Language - Dialect (Region)" or "Language (Region)"
+    const mainLangMatch = lowerLangLabel.match(/^([a-z\s]+)(?:[^\w(]|$)/i);
+    let mainLangPart = mainLangMatch ? mainLangMatch[1].trim() : lowerLangLabel;
 
-    const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/); // e.g., (Brazil), (LA)
+    let regionCode = '';
+    const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/);
     if (regionMatch) {
         const region = regionMatch[1].toLowerCase();
-        mainLangPart = mainLangPart.replace(regionMatch[0], '').trim(); // Remove "(Region)"
         if (region === 'brasil' || region === 'brazil' || region === 'br') regionCode = 'BR';
         else if (region === 'la' || region === 'latin america' || region === 'latin_america') regionCode = 'LA';
-        // Add more region codes as needed
     }
 
-    // Remove prefixes like "CR_"
-    const crSplit = mainLangPart.split('cr_');
-    if (crSplit.length > 1) mainLangPart = crSplit[1].trim();
-    
-    // Remove suffixes like " - ..."
-    const langDashSplit = mainLangPart.split(' - ');
-    if (langDashSplit.length > 1) mainLangPart = langDashSplit[0].trim(); // Take the part before " - "
-    else mainLangPart = langDashSplit[0].trim();
-
-
     const langNameMap: { [key: string]: string } = {
-      "english": "en", "ingles": "en", "inglês": "en",
+      "english": "en", "ingles": "en", "inglês": "en", "inglés": "en",
       "spanish": "es", "español": "es",
       "german": "de", "deutsch": "de",
       "french": "fr", "français": "fr",
@@ -284,15 +274,13 @@ function WatchPageContent({}: WatchPageContentProps) {
 
     let code = langNameMap[mainLangPart] || 'und';
 
-    // Apply region code if applicable
     if (code === 'pt' && regionCode === 'BR') code = 'pt-BR';
     else if (code === 'es' && regionCode === 'LA') code = 'es-LA';
     else if (code === 'und' && (mainLangPart.length === 2 || mainLangPart.length === 3) && /^[a-z]{2,3}$/.test(mainLangPart)) {
-      // If after all parsing, mainLangPart is a 2 or 3 letter code, assume it's the lang code.
       code = mainLangPart;
     }
     
-    if (code === 'und' && !langLabel.toLowerCase().includes('thumbnails')) { // Don't warn for 'thumbnails'
+    if (code === 'und' && !lowerLangLabel.includes('thumbnails')) {
         console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
     }
     return code;
@@ -304,6 +292,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   };
   
   const actualSubtitles = useMemo(() => {
+    // Filter out tracks labeled "thumbnails" or those that don't have a lang property
     return streamingInfo?.subtitles?.filter(sub => sub.lang && !sub.lang.toLowerCase().includes('thumbnails')) || [];
   }, [streamingInfo?.subtitles]);
   
@@ -322,13 +311,12 @@ function WatchPageContent({}: WatchPageContentProps) {
       if (langCode !== 'und') return langCode;
     }
     
-    // Fallback to the first valid track if no default or English
-    if (actualSubtitles[0]) {
-      const firstLangCode = getLangCode(actualSubtitles[0].lang);
-      if (firstLangCode !== 'und') {
-          console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available track's language:", actualSubtitles[0].lang, "Code:", firstLangCode);
-          return firstLangCode;
-      }
+    for (const sub of actualSubtitles) {
+        const langCode = getLangCode(sub.lang);
+        if (langCode !== 'und') {
+            console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available valid track's language:", sub.lang, "Code:", langCode);
+            return langCode;
+        }
     }
     return null;
   }, [actualSubtitles]);
@@ -438,7 +426,7 @@ function WatchPageContent({}: WatchPageContentProps) {
           title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
           src={{ src: playerSrcUrl, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
-          crossOrigin 
+          crossOrigin // Added for HLS/DASH streams and text tracks from different origins
           playsInline
           onProviderChange={(provider: MediaProviderAdapter | null) => {
             console.log("[WatchPageContent] onProviderChange triggered. Provider type:", provider?.type);
@@ -454,28 +442,28 @@ function WatchPageContent({}: WatchPageContentProps) {
             console.log('[Vidstack] TextTracksChange:', tracks.map(t => ({label: t.label, language: t.language, mode: t.mode, kind: t.kind, id: t.id, src: t.src, type: t.type, default: t.default })));
           }}
           onTextTrackChange={(track, event) => { 
-            console.log('[Vidstack] TextTrackChange (selected):', track ? {label: track.label, language: track.language, mode: t.mode, kind: track.kind, id: track.id, src: track.src, type: track.type, default: track.default } : null);
+            console.log('[Vidstack] TextTrackChange (selected):', track ? {label: track.label, language: track.language, mode: track.mode, kind: track.kind, id: track.id, src: track.src, type: track.type, default: track.default } : null);
           }}
         >
           <MediaProvider>
             {actualSubtitles.map((sub) => {
               const trackLang = getLangCode(sub.lang);
-              // Only render track if language code is determined and not 'und'
               if (trackLang === 'und') { 
-                  console.log(`[WatchPageContent] Skipping rendering Vidstack <Track> for lang: '${sub.lang}' as its code is 'und'.`);
+                  console.log(`[WatchPageContent] Skipping rendering Vidstack <Track> for lang: '${sub.lang}' as its code is 'und'. URL: ${sub.url}`);
                   return null;
               }
               const subtitleUrl = getDirectSubtitleUrl(sub.url); 
-              console.log(`[WatchPageContent] Rendering Vidstack <Track>: lang='${sub.lang}', trackLang='${trackLang}', default=${trackLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
+              console.log(`[WatchPageContent] Rendering Vidstack <Track>: lang='${sub.lang}', srcLang='${trackLang}', default=${trackLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
               return (
                 <Track
                   key={subtitleUrl} 
                   src={subtitleUrl}
                   kind="subtitles" 
-                  label={sub.lang} // User-friendly label from API
-                  lang={trackLang}  // BCP 47 language tag
+                  label={sub.lang} 
+                  lang={trackLang}  
                   default={trackLang === defaultTrackSrcLang}
-                  type="vtt" // Assuming VTT format
+                  type="vtt" 
+                  crossOrigin="anonymous" // Important for cross-origin text tracks
                 />
               );
             })}
@@ -529,3 +517,4 @@ export default function WatchPage() {
     </Suspense>
   );
 }
+
