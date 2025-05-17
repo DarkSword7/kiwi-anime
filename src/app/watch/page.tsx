@@ -42,7 +42,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
   const [hlsProviderInstance, setHlsProviderInstance] = useState<HlsProvider | null>(null);
 
-  const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape"]; 
+  const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape", "animepahe"]; 
 
   console.log(`[WatchPageContent] Initializing. episodeIdFromQuery: ${episodeIdFromQuery}, animeId: ${animeId}, selectedServer: ${selectedServer}`);
   if (!episodeIdFromQuery) {
@@ -160,10 +160,15 @@ function WatchPageContent({}: WatchPageContentProps) {
         return;
     }
 
-    if (streamingInfo?.headers && currentSource?.isM3U8) {
+    // Ensure hlsProviderInstance.config exists
+    if (!hlsProviderInstance.config) {
+      hlsProviderInstance.config = {};
+    }
+
+    if (streamingInfo?.headers && currentSource?.isM3U8 && Object.keys(streamingInfo.headers).length > 0) {
       const apiHeaders = { ...streamingInfo.headers };
       
-      Object.keys(apiHeaders).forEach(key => {
+      Object.keys(apiHeaders).forEach(key => { // Remove null/undefined headers
         if (apiHeaders[key] == null) { 
           delete apiHeaders[key];
         }
@@ -171,10 +176,6 @@ function WatchPageContent({}: WatchPageContentProps) {
 
       if (Object.keys(apiHeaders).length > 0) {
         console.log('[WatchPageContent] Configuring HLS provider WITH custom headers:', JSON.stringify(apiHeaders));
-        
-        if (!hlsProviderInstance.config) {
-          hlsProviderInstance.config = {};
-        }
         
         hlsProviderInstance.config.xhrSetup = (xhr: XMLHttpRequest, requestUrl: string) => {
           console.log(`[WatchPageContent] HLS xhrSetup for URL: ${requestUrl}. Applying headers:`, JSON.stringify(apiHeaders));
@@ -193,7 +194,7 @@ function WatchPageContent({}: WatchPageContentProps) {
         }
       }
     } else {
-        console.log('[WatchPageContent] Conditions for HLS custom headers not met (not M3U8, or no API headers, or no HLS provider). Clearing previous HLS xhrSetup if any.');
+        console.log('[WatchPageContent] Conditions for HLS custom headers not met (not M3U8, or no API headers, or no HLS provider instance). Clearing previous HLS xhrSetup if any.');
         if (hlsProviderInstance.config?.xhrSetup) {
             delete hlsProviderInstance.config.xhrSetup; 
         }
@@ -391,3 +392,4 @@ export default function WatchPage() {
     </Suspense>
   );
 }
+
