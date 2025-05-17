@@ -63,7 +63,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined); 
-      setHlsProviderInstance(null); 
+      // Do NOT reset hlsProviderInstance here, it's managed by onProviderChange
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -143,8 +143,8 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
-    // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
     if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev/') && !url.includes('animefreestream.vercel.app/')) {
+        console.log("[WatchPageContent] Applying CipherTV CORS proxy to URL:", url);
         url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
         console.log("[WatchPageContent] Using CipherTV CORS proxied URL for player manifest:", url);
     } else {
@@ -156,17 +156,19 @@ function WatchPageContent({}: WatchPageContentProps) {
 
   useEffect(() => {
     console.log(
-      `[WatchPageContent] HLS Effect. Provider: ${hlsProviderInstance ? 'Yes' : 'No'}, Headers: ${streamingInfo?.headers ? 'Yes' : 'No'}, Source URL: ${currentSource?.url ? 'Yes' : 'No'}, IsM3U8: ${currentSource?.isM3U8}`
+      `[WatchPageContent] HLS Effect Triggered. hlsProviderInstance: ${hlsProviderInstance ? 'Yes' : 'No'} streamingInfo.headers: ${streamingInfo?.headers ? 'Yes' : 'No'} currentSource.isM3U8: ${currentSource?.isM3U8}`
     );
   
     if (!hlsProviderInstance || !currentSource?.isM3U8) {
       if (hlsProviderInstance?.config?.xhrSetup) {
         console.log('[WatchPageContent] Clearing HLS xhrSetup (no M3U8 source or no provider).');
+        // Create a new config object to ensure reactivity if HLS.js internals are sensitive
         hlsProviderInstance.config = { ...hlsProviderInstance.config, xhrSetup: undefined };
       }
       return;
     }
   
+    // Ensure config object exists
     if (!hlsProviderInstance.config) {
       console.warn('[WatchPageContent] HLS provider instance.config is unexpectedly null/undefined. Initializing.');
       hlsProviderInstance.config = {};
@@ -174,13 +176,14 @@ function WatchPageContent({}: WatchPageContentProps) {
   
     if (streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0) {
       const apiHeaders = { ...streamingInfo.headers };
+      // Remove null/undefined headers
       Object.keys(apiHeaders).forEach((key) => {
         if (apiHeaders[key] == null) delete apiHeaders[key];
       });
   
       if (Object.keys(apiHeaders).length > 0) {
         console.log('[WatchPageContent] APPLYING HLS xhrSetup with headers:', JSON.stringify(apiHeaders));
-        hlsProviderInstance.config.xhrSetup = (xhr, requestUrl) => {
+        const newXhrSetup = (xhr: XMLHttpRequest, requestUrl: string) => {
           console.log(`[HLS xhrSetup] Applying to ${requestUrl}:`, JSON.stringify(apiHeaders));
           for (const headerKey in apiHeaders) {
             if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
@@ -188,10 +191,13 @@ function WatchPageContent({}: WatchPageContentProps) {
             }
           }
         };
+        // Assign new function to trigger update if HLS.js is sensitive to identity
+        hlsProviderInstance.config = { ...hlsProviderInstance.config, xhrSetup: newXhrSetup };
+
       } else {
         if (hlsProviderInstance.config.xhrSetup) {
           console.log('[WatchPageContent] Clearing HLS xhrSetup (no valid API headers).');
-           hlsProviderInstance.config = { ...hlsProviderInstance.config, xhrSetup: undefined };
+          hlsProviderInstance.config = { ...hlsProviderInstance.config, xhrSetup: undefined };
         }
       }
     } else {
@@ -201,13 +207,13 @@ function WatchPageContent({}: WatchPageContentProps) {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hlsProviderInstance, streamingInfo?.headers, currentSource?.isM3U8, currentSource?.url]); // Added currentSource.url to re-apply if URL changes but headers remain same.
+  }, [hlsProviderInstance, streamingInfo?.headers, currentSource?.isM3U8, currentSource?.url]);
   
 
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
+    setHlsProviderInstance(null); // Reset HLS provider on server change
     setSelectedServer(newServer);
-    setHlsProviderInstance(null); 
   };
 
   const navigateEpisode = (direction: 'next' | 'prev') => {
@@ -221,7 +227,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     if (targetEpisode) {
-      setHlsProviderInstance(null); 
+      setHlsProviderInstance(null); // Reset HLS provider on episode change
       router.push(`/watch?ep=${encodeURIComponent(targetEpisode.id)}&animeId=${animeId}&epNum=${targetEpisode.number}`);
     }
   };
@@ -230,13 +236,38 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
   // Helper to get 2-letter language code
-  const getLangCode = (langLabel: string) => {
+  const getLangCode = (langLabel: string): string => {
+    if (!langLabel) return 'und'; // Undetermined
     const langMap: { [key: string]: string } = {
       "english": "en", "spanish": "es", "japanese": "ja", "german": "de", "french": "fr",
+      "portuguese (brazilian)": "pt-BR", "arabic": "ar", "russian": "ru", "italian": "it"
       // Add more mappings as needed
     };
-    return langMap[langLabel.toLowerCase()] || langLabel.substring(0, 2).toLowerCase();
+    const lowerLangLabel = langLabel.toLowerCase();
+    return langMap[lowerLangLabel] || lowerLangLabel.substring(0, 2);
   };
+
+  const getProxiedSubtitleUrl = (originalUrl: string): string => {
+    let url = originalUrl;
+    if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev/') && !url.includes('animefreestream.vercel.app/')) {
+        console.log("[WatchPageContent] Applying CipherTV CORS proxy to subtitle URL:", url);
+        url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
+    }
+    return url;
+  };
+  
+  const defaultTrackSrcLang = useMemo(() => {
+    if (!streamingInfo?.subtitles || streamingInfo.subtitles.length === 0) return null;
+    
+    const apiDefault = streamingInfo.subtitles.find(s => s.default === true);
+    if (apiDefault) return getLangCode(apiDefault.lang);
+
+    const firstEnglish = streamingInfo.subtitles.find(s => s.lang.toLowerCase() === 'english');
+    if (firstEnglish) return getLangCode(firstEnglish.lang);
+    
+    // Fallback to the very first track if no English and no API default
+    return getLangCode(streamingInfo.subtitles[0].lang); 
+  }, [streamingInfo?.subtitles]);
 
 
   if (!episodeIdFromQuery && !isLoading) { 
@@ -341,30 +372,33 @@ function WatchPageContent({}: WatchPageContentProps) {
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
           crossOrigin 
           playsInline
-          onProviderChange={(provider: MediaProviderAdapter | null) => {
-            console.log("[WatchPageContent] onProviderChange triggered. Provider:", provider);
-            if (provider && provider.type === 'hls') {
-              console.log("[WatchPageContent] HLS provider instance obtained from onProviderChange:", provider);
-              setHlsProviderInstance(provider as HlsProvider);
+          onProviderChange={(providerAdapter: MediaProviderAdapter | null) => {
+            console.log("[WatchPageContent] onProviderChange triggered. Provider Adapter:", providerAdapter);
+            if (providerAdapter && providerAdapter.type === 'hls') {
+              console.log("[WatchPageContent] HLS provider instance obtained from onProviderChange:", providerAdapter);
+              setHlsProviderInstance(providerAdapter as HlsProvider);
             } else {
-              if (hlsProviderInstance) { 
-                console.log("[WatchPageContent] Non-HLS or null provider from onProviderChange. Clearing HLS instance. Provider was:", provider);
+              if (hlsProviderInstance || providerAdapter === null) { // Log if clearing or if it's a non-HLS provider
+                console.log("[WatchPageContent] Non-HLS or null provider from onProviderChange. Clearing HLS instance. Provider was:", providerAdapter);
               }
               setHlsProviderInstance(null); 
             }
           }}
         >
           <MediaProvider />
-          {streamingInfo?.subtitles?.map((sub) => (
-            <track
-              key={sub.url}
-              src={sub.url}
-              kind="subtitles"
-              label={sub.lang}
-              srcLang={getLangCode(sub.lang)}
-              default={sub.default}
-            />
-          ))}
+          {streamingInfo?.subtitles?.map((sub) => {
+            const trackSrcLang = getLangCode(sub.lang);
+            return (
+              <track
+                key={sub.url + sub.lang} // More unique key
+                src={getProxiedSubtitleUrl(sub.url)}
+                kind="subtitles"
+                label={sub.lang}
+                srcLang={trackSrcLang}
+                default={trackSrcLang === defaultTrackSrcLang}
+              />
+            );
+          })}
           <DefaultVideoLayout icons={defaultLayoutIcons} />
         </MediaPlayer>
       )}
@@ -412,3 +446,4 @@ export default function WatchPage() {
     </Suspense>
   );
 }
+
