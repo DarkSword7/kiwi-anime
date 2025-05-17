@@ -326,8 +326,7 @@ function WatchPageContent({ episodeId: episodeIdFromParams }: WatchPageContentPr
 }
 
 
-export default function WatchPage({ params }: WatchPageServerProps) {
-  const episodeIdFromRoute = params.episodeId;
+export default function WatchPage({ params: { episodeId } }: WatchPageServerProps) {
   return (
     <Suspense fallback={
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
@@ -335,7 +334,7 @@ export default function WatchPage({ params }: WatchPageServerProps) {
         <p className="text-xl text-muted-foreground">Loading episode information...</p>
       </div>
     }>
-      <WatchPageContent episodeId={episodeIdFromRoute} />
+      <WatchPageContent episodeId={episodeId} />
     </Suspense>
   );
 }
