@@ -42,6 +42,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
   const [hlsProvider, setHlsProvider] = useState<HLSProvider | null>(null);
 
+
   const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape", "animepahe"]; 
 
   console.log(`[WatchPageContent] Initializing. episodeIdFromQuery: ${episodeIdFromQuery}, animeId: ${animeId}, selectedServer: ${selectedServer}`);
@@ -63,7 +64,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined);
-      setHlsProvider(null); 
+      // setHlsProvider(null); // Reset HLS provider instance on new fetch if it's managed by onProviderChange
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -165,7 +166,6 @@ function WatchPageContent({}: WatchPageContentProps) {
     console.log("[WatchPageContent] HLS Effect Triggered. hlsProvider:", hlsProvider, "streamingInfo.headers:", streamingInfo?.headers, "currentSource.isM3U8:", currentSource?.isM3U8);
     if (hlsProvider && streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0 && currentSource?.isM3U8) {
       const apiHeaders = { ...streamingInfo.headers };
-      // Remove null/undefined/empty headers and filter for common ones if necessary
       Object.keys(apiHeaders).forEach(key => {
         if (apiHeaders[key] == null || apiHeaders[key] === '') {
           delete apiHeaders[key];
@@ -175,7 +175,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       if (Object.keys(apiHeaders).length > 0) {
         console.log('[WatchPageContent] Configuring HLS provider with custom headers:', JSON.stringify(apiHeaders));
         hlsProvider.config = {
-          ...hlsProvider.config, // Preserve existing HLS config
+          ...hlsProvider.config, 
           xhrSetup: (xhr: XMLHttpRequest, requestUrl: string) => {
             console.log(`[WatchPageContent] HLS xhrSetup for ${requestUrl}. Applying headers:`, JSON.stringify(apiHeaders));
             for (const headerKey in apiHeaders) {
@@ -187,14 +187,12 @@ function WatchPageContent({}: WatchPageContentProps) {
         };
       } else {
         console.log('[WatchPageContent] No valid API headers to apply to HLS config.');
-         // Ensure xhrSetup is cleared if no headers are to be applied
         if (hlsProvider.config?.xhrSetup) {
             delete hlsProvider.config.xhrSetup;
             console.log('[WatchPageContent] Cleared existing HLS xhrSetup.');
         }
       }
     } else if (hlsProvider && hlsProvider.config?.xhrSetup) {
-        // Clear xhrSetup if conditions are not met (e.g., not M3U8, or no headers)
         delete hlsProvider.config.xhrSetup;
         console.log('[WatchPageContent] Cleared existing HLS xhrSetup as conditions not met.');
     } else if (!hlsProvider) {
@@ -247,7 +245,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   };
 
   const getProxiedSubtitleUrl = (originalUrl: string): string => {
-    if (originalUrl.startsWith('http') && !originalUrl.includes('proxys.ciphertv.dev')) {
+    if (originalUrl.startsWith('http') && !originalUrl.includes(CIPHERTV_CORS_PROXY_URL)) {
         try {
             const proxied = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(new URL(originalUrl).toString())}`;
             console.log("[WatchPageContent] Using proxied URL for subtitle:", proxied);
@@ -257,7 +255,7 @@ function WatchPageContent({}: WatchPageContentProps) {
             return originalUrl;
         }
     }
-    console.log("[WatchPageContent] Using direct URL for subtitle (not proxying):", originalUrl);
+    console.log("[WatchPageContent] Using direct URL for subtitle (not proxying or already proxied):", originalUrl);
     return originalUrl;
   };
   
@@ -270,8 +268,11 @@ function WatchPageContent({}: WatchPageContentProps) {
     const firstEnglish = streamingInfo.subtitles.find(s => s.lang.toLowerCase().includes('english'));
     if (firstEnglish) return getLangCode(firstEnglish.lang);
     
-    console.log("[WatchPageContent] No default or English subtitle track found, defaulting to first available track's language:", streamingInfo.subtitles[0].lang);
-    return getLangCode(streamingInfo.subtitles[0].lang); 
+    if (streamingInfo.subtitles[0]) {
+      console.log("[WatchPageContent] No default or English subtitle track found, defaulting to first available track's language:", streamingInfo.subtitles[0].lang);
+      return getLangCode(streamingInfo.subtitles[0].lang); 
+    }
+    return null;
   }, [streamingInfo?.subtitles]);
 
 
@@ -403,7 +404,7 @@ function WatchPageContent({}: WatchPageContentProps) {
             console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang}, originalUrl=${sub.url}, proxiedUrl=${subtitleUrl}`);
             return (
               <track
-                key={subtitleUrl + sub.lang} 
+                key={sub.url} 
                 src={subtitleUrl}
                 kind="subtitles"
                 label={sub.lang}
