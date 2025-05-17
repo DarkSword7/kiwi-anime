@@ -1,3 +1,4 @@
+
 // Base structure for an anime item, typically from search results
 export interface AnimeSearchResult {
   id: string; // Identifier for fetching detailed info, e.g., "spy-x-family.6ll19"
@@ -36,6 +37,13 @@ export interface StreamingSource {
   isM3U8?: boolean;
 }
 
+// Represents a subtitle track
+export interface SubtitleTrack {
+  url: string; // URL to the VTT subtitle file
+  lang: string; // Language label, e.g., "English", "Spanish"
+  default?: boolean; // Optional: whether this is the default subtitle track
+}
+
 export interface StreamingLinks {
   headers?: {
     Referer?: string;
@@ -43,13 +51,10 @@ export interface StreamingLinks {
     "User-Agent"?: string | null;
   };
   sources: StreamingSource[];
+  subtitles?: SubtitleTrack[]; // Added subtitles
   download?: string; // Optional download link
 }
 
 // Unified Anime type for internal use, especially for components like AnimeCard
 // This can be expanded as needed.
 export type Anime = AnimeSearchResult & Partial<Pick<AnimeInfo, 'genres' | 'status' | 'description' | 'totalEpisodes'>>;
-
-// Note: 'rating', 'studios', 'trending', 'popular', 'year' (as a number) from the old mock type
-// are not directly available or consistently provided by the Consumet 9anime API.
-// 'year' can be derived from 'releaseDate'. 'trending'/'popular' flags would be app-level logic.

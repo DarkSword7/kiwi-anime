@@ -2,10 +2,10 @@
 'use server';
 
 import axios from 'axios';
-import type { AnimeSearchResult, AnimeInfo, Episode, StreamingLinks } from '@/types/anime';
+import type { AnimeSearchResult, AnimeInfo, Episode, StreamingLinks, SubtitleTrack } from '@/types/anime';
 
 const API_BASE_URL = 'https://animefreestream.vercel.app';
-const ZORO_PROVIDER_PATH = '/anime/zoro'; // Using Zoro provider path
+const ZORO_PROVIDER_PATH = '/anime/zoro';
 
 // Centralized error logging for API calls
 const logApiError = (error: any, context: string, requestUrl: string, queryParams?: object) => {
@@ -20,13 +20,22 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
       if (responseData.trim().startsWith('<!DOCTYPE html>') || responseData.trim().startsWith('<html')) {
         responseData = '[HTML Response - Truncated]';
       } else {
-        // Truncate very long strings that aren't clearly HTML
-        responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated]' : '');
+        try {
+          // Attempt to parse if it's a JSON string
+          const parsedJson = JSON.parse(responseData);
+          responseData = JSON.stringify(parsedJson, null, 2);
+          if (responseData.length > 1000) {
+             responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
+          }
+        } catch (e) {
+          // Not JSON, truncate if very long
+          responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated String]' : '');
+        }
       }
     } else if (typeof responseData === 'object' && responseData !== null) {
       try {
         responseData = JSON.stringify(responseData, null, 2);
-         if (responseData.length > 1000) { // Further truncate if stringified JSON is too long
+         if (responseData.length > 1000) { 
             responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
         }
       } catch (e: any) {
@@ -76,17 +85,17 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
   }
 }
 
-export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
+export async function getAnimeInfo(animeId: string): Promise<AnimeInfo | null> {
   const context = 'getAnimeInfo (Zoro)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/info`; // id will be a query param
+  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/info`;
 
-  console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Query Params:`, { id });
+  console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Query Params:`, { id: animeId });
 
   try {
-    const { data } = await axios.get(requestUrl, { params: { id } });
+    const { data } = await axios.get(requestUrl, { params: { id: animeId } });
 
     if (!data || (typeof data === 'object' && Object.keys(data).length === 0 && !(data instanceof Array))) {
-      console.warn(`[anime-service] ${context}: No data or empty object received from ${requestUrl} for id ${id}.`);
+      console.warn(`[anime-service] ${context}: No data or empty object received from ${requestUrl} for id ${animeId}.`);
       return null;
     }
     
@@ -103,45 +112,46 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
 
     if (typeof data.id !== 'string' && typeof data.id !== 'number') {
         console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Missing or invalid id. Data:`, data);
-        if (!id && !(data.id)) return null; 
+        if (!animeId && !(data.id)) return null; 
     }
     
     const episodes = Array.isArray(data.episodes) ? data.episodes.map((ep: any) => ({...ep, id: String(ep.id)})) : [];
     
     return {
         ...data,
-        id: String(data.id || id), 
+        id: String(data.id || animeId), 
         title: title,
         episodes,
     } as AnimeInfo;
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
-      console.log(`[anime-service] ${context}: Anime with ID ${id} not found (404) at ${requestUrl}.`);
+      console.log(`[anime-service] ${context}: Anime with ID ${animeId} not found (404) at ${requestUrl}.`);
       return null;
     }
-    logApiError(error, context, requestUrl, { id });
+    logApiError(error, context, requestUrl, { id: animeId });
     return null;
   }
 }
 
 export async function getEpisodeStreamingLinks(episodeId: string, server: string = 'vidcloud'): Promise<StreamingLinks | null> {
   const context = 'getEpisodeStreamingLinks (Zoro)';
-  // episodeId is now a path parameter
   const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/watch/${encodeURIComponent(episodeId)}`; 
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Query Params:`, { server });
   
   try {
     const { data } = await axios.get(requestUrl, {
-      params: { server }, // server remains a query parameter
+      params: { server },
     });
 
     if (typeof data === 'object' && data !== null && Array.isArray(data.sources)) {
         const validSources = (data.sources || []).filter((s: any) => typeof s.url === 'string' && s.url.trim() !== '');
+        const subtitles = (data.subtitles || []).filter((sub: any) => typeof sub.url === 'string' && sub.url.trim() !== '' && typeof sub.lang === 'string') as SubtitleTrack[];
         
         return {
             headers: data.headers || {},
             sources: validSources,
+            subtitles: subtitles,
             download: data.download,
         } as StreamingLinks;
     } else {
@@ -166,7 +176,7 @@ export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearc
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
       return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (data && Array.isArray(data)) { // Some /top-airing endpoints return an array directly
+    } else if (data && Array.isArray(data)) { 
         return (data || []).slice(0,8) as AnimeSearchResult[];
     }
      else {
@@ -187,7 +197,7 @@ export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearch
     const { data } = await axios.get(requestUrl, { params: { page } });
      if (data && Array.isArray(data.results)) {
       return (data.results || []).slice(0, 8) as AnimeSearchResult[];
-    } else if (data && Array.isArray(data)) { // Some /most-popular endpoints return an array directly
+    } else if (data && Array.isArray(data)) { 
         return (data || []).slice(0,8) as AnimeSearchResult[];
     }
      else {

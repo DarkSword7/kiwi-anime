@@ -6,7 +6,7 @@ import { MediaPlayer, MediaProvider, type MediaProviderAdapter } from '@vidstack
 import type { HlsProvider } from '@vidstack/react/providers/hls';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
-import type { StreamingLinks, AnimeInfo, StreamingSource } from '@/types/anime';
+import type { StreamingLinks, AnimeInfo, StreamingSource, SubtitleTrack } from '@/types/anime';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   const [animeDetails, setAnimeDetails] = useState<AnimeInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedServer, setSelectedServer] = useState<string>('vidstreaming'); // Default server
+  const [selectedServer, setSelectedServer] = useState<string>('vidstreaming'); 
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
   const [hlsProviderInstance, setHlsProviderInstance] = useState<HlsProvider | null>(null);
 
@@ -63,7 +63,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined); 
-      setHlsProviderInstance(null); // Reset HLS provider instance on new fetch
+      setHlsProviderInstance(null); 
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -86,6 +86,10 @@ function WatchPageContent({}: WatchPageContentProps) {
           } else {
             console.log("[WatchPageContent] No custom headers received from API for this source/server.");
           }
+          if (links.subtitles && links.subtitles.length > 0) {
+            console.log("[WatchPageContent] Subtitles received:", JSON.stringify(links.subtitles));
+          }
+
         } else {
           const errorMsg = `No streaming links found for episode ${episodeIdFromQuery} on server '${selectedServer}'. This could be due to the episode not being available, an API issue, or the server not being supported for this provider. Try another server.`;
           setError(errorMsg);
@@ -139,6 +143,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
+    // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
     if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev/') && !url.includes('animefreestream.vercel.app/')) {
         url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
         console.log("[WatchPageContent] Using CipherTV CORS proxied URL for player manifest:", url);
@@ -157,7 +162,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     if (!hlsProviderInstance || !currentSource?.isM3U8) {
       if (hlsProviderInstance?.config?.xhrSetup) {
         console.log('[WatchPageContent] Clearing HLS xhrSetup (no M3U8 source or no provider).');
-        delete hlsProviderInstance.config.xhrSetup;
+        hlsProviderInstance.config = { ...hlsProviderInstance.config, xhrSetup: undefined };
       }
       return;
     }
@@ -186,16 +191,17 @@ function WatchPageContent({}: WatchPageContentProps) {
       } else {
         if (hlsProviderInstance.config.xhrSetup) {
           console.log('[WatchPageContent] Clearing HLS xhrSetup (no valid API headers).');
-          delete hlsProviderInstance.config.xhrSetup;
+           hlsProviderInstance.config = { ...hlsProviderInstance.config, xhrSetup: undefined };
         }
       }
     } else {
       if (hlsProviderInstance.config.xhrSetup) {
         console.log('[WatchPageContent] Clearing HLS xhrSetup (no streamingInfo.headers).');
-        delete hlsProviderInstance.config.xhrSetup;
+        hlsProviderInstance.config = { ...hlsProviderInstance.config, xhrSetup: undefined };
       }
     }
-  }, [hlsProviderInstance, streamingInfo, currentSource]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hlsProviderInstance, streamingInfo?.headers, currentSource?.isM3U8, currentSource?.url]); // Added currentSource.url to re-apply if URL changes but headers remain same.
   
 
   const handleServerChange = (newServer: string) => {
@@ -222,6 +228,16 @@ function WatchPageContent({}: WatchPageContentProps) {
   
   const hasPrevEpisode = currentEpNumber > 1 && animeDetails?.episodes?.some(ep => ep.number === currentEpNumber - 1);
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
+
+  // Helper to get 2-letter language code
+  const getLangCode = (langLabel: string) => {
+    const langMap: { [key: string]: string } = {
+      "english": "en", "spanish": "es", "japanese": "ja", "german": "de", "french": "fr",
+      // Add more mappings as needed
+    };
+    return langMap[langLabel.toLowerCase()] || langLabel.substring(0, 2).toLowerCase();
+  };
+
 
   if (!episodeIdFromQuery && !isLoading) { 
      return (
@@ -325,7 +341,8 @@ function WatchPageContent({}: WatchPageContentProps) {
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
           crossOrigin 
           playsInline
-          onProviderChange={(provider: MediaProviderAdapter | null) => { // Corrected callback signature
+          onProviderChange={(provider: MediaProviderAdapter | null) => {
+            console.log("[WatchPageContent] onProviderChange triggered. Provider:", provider);
             if (provider && provider.type === 'hls') {
               console.log("[WatchPageContent] HLS provider instance obtained from onProviderChange:", provider);
               setHlsProviderInstance(provider as HlsProvider);
@@ -338,6 +355,16 @@ function WatchPageContent({}: WatchPageContentProps) {
           }}
         >
           <MediaProvider />
+          {streamingInfo?.subtitles?.map((sub) => (
+            <track
+              key={sub.url}
+              src={sub.url}
+              kind="subtitles"
+              label={sub.lang}
+              srcLang={getLangCode(sub.lang)}
+              default={sub.default}
+            />
+          ))}
           <DefaultVideoLayout icons={defaultLayoutIcons} />
         </MediaPlayer>
       )}
@@ -385,4 +412,3 @@ export default function WatchPage() {
     </Suspense>
   );
 }
-
