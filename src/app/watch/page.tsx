@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
-import { MediaPlayer, MediaProvider, type HLSProvider, type MediaProviderAdapter } from '@vidstack/react';
+import { MediaPlayer, MediaProvider, type HLSProvider, type MediaProviderAdapter, Captions } from '@vidstack/react';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
 import type { StreamingLinks, AnimeInfo, StreamingSource, SubtitleTrack } from '@/types/anime';
@@ -208,7 +208,7 @@ function WatchPageContent({}: WatchPageContentProps) {
         delete hlsProvider.config.xhrSetup;
         console.log('[WatchPageContent] Cleared existing HLS xhrSetup as conditions not met for applying custom headers.');
     } else if (!hlsProvider) {
-        // console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers.');
+         console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers for HLS Effect.');
     }
   }, [hlsProvider, streamingInfo, currentSource]);
 
@@ -242,20 +242,25 @@ const getLangCode = (langLabel: string): string => {
     if (!langLabel) return 'und';
     let lowerLangLabel = langLabel.toLowerCase().trim();
 
-    if (lowerLangLabel.includes('thumbnails')) return 'und'; // Explicitly mark thumbnails as undetermined
+    // Explicitly mark thumbnails as undetermined and skip rendering them as subtitles
+    if (lowerLangLabel.includes('thumbnails')) {
+        console.log(`[WatchPageContent] getLangCode: langLabel '${langLabel}' identified as 'thumbnails', returning 'und'.`);
+        return 'und'; 
+    }
 
     // More robust parsing for labels like "Language - CR_Language(Region)" or "Language (Region)"
     const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/); // e.g., (brazil), (latin_america), (la)
     let regionCode = '';
     if (regionMatch) {
-        const region = regionMatch[1];
+        const region = regionMatch[1].toLowerCase();
         lowerLangLabel = lowerLangLabel.replace(regionMatch[0], '').trim(); // Remove region part
         if (region === 'brazil' || region === 'br') regionCode = 'BR';
         else if (region === 'latin_america' || region === 'la') regionCode = 'LA';
     }
     
-    // Extract main language part, e.g., "portuguese" from "portuguese - cr_portuguese"
-    const mainLangPart = lowerLangLabel.split(/[\s-]+/)[0];
+    const mainLangPartMatch = lowerLangLabel.match(/^([a-z\s]+)/);
+    const mainLangPart = mainLangPartMatch ? mainLangPartMatch[0].trim() : lowerLangLabel;
+
 
     const langNameMap: { [key: string]: string } = {
       "english": "en", "ingles": "en", "inglês": "en",
@@ -263,7 +268,7 @@ const getLangCode = (langLabel: string): string => {
       "german": "de", "deutsch": "de",
       "french": "fr", "français": "fr",
       "portuguese": "pt", "português": "pt", "portugues": "pt",
-      "arabic": "ar", "árabe": "ar",
+      "arabic": "ar", "árabe": "ar", "العربية": "ar",
       "russian": "ru", "русский": "ru",
       "italian": "it", "italiano": "it",
       "japanese": "ja", "日本語": "ja",
@@ -281,11 +286,10 @@ const getLangCode = (langLabel: string): string => {
     if (code === 'pt' && regionCode === 'BR') code = 'pt-BR';
     else if (code === 'es' && regionCode === 'LA') code = 'es-LA';
     else if (code === 'und' && (mainLangPart.length === 2 || mainLangPart.length === 3) && /^[a-z]{2,3}$/.test(mainLangPart)) {
-      // If it's a 2 or 3 letter code already and seems valid, assume it's correct
       code = mainLangPart;
     }
     
-    if (code === 'und' && !lowerLangLabel.includes('thumbnails')) {
+    if (code === 'und') {
         console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
     }
     return code;
@@ -293,7 +297,8 @@ const getLangCode = (langLabel: string): string => {
 
 
   const getProxiedSubtitleUrl = (originalUrl: string): string => {
-    if (originalUrl.startsWith('http') && !originalUrl.includes('proxys.ciphertv.dev') && !originalUrl.includes('animefreestream.vercel.app/')) {
+    // Only proxy external HTTP/HTTPS URLs. Do not proxy data URIs or relative paths.
+    if (originalUrl && originalUrl.startsWith('http') && !originalUrl.includes('proxys.ciphertv.dev') && !originalUrl.includes('animefreestream.vercel.app/')) {
       try {
         const proxied = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(originalUrl)}`;
         console.log("[WatchPageContent] Using proxied URL for subtitle:", proxied, "Original:", originalUrl);
@@ -307,6 +312,7 @@ const getLangCode = (langLabel: string): string => {
     return originalUrl;
   };
   
+  // Filter out "thumbnails" tracks from being rendered as actual subtitles
   const actualSubtitles = useMemo(() => {
     return streamingInfo?.subtitles?.filter(sub => sub.lang && !sub.lang.toLowerCase().includes('thumbnails')) || [];
   }, [streamingInfo?.subtitles]);
@@ -323,7 +329,7 @@ const getLangCode = (langLabel: string): string => {
     if (actualSubtitles[0]) {
       const firstLangCode = getLangCode(actualSubtitles[0].lang);
       console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available track's language:", actualSubtitles[0].lang, "Code:", firstLangCode);
-      return firstLangCode;
+      return firstLangCode !== 'und' ? firstLangCode : null; // Only set if lang code is determined
     }
     return null;
   }, [actualSubtitles]);
@@ -456,20 +462,26 @@ const getLangCode = (langLabel: string): string => {
           <MediaProvider />
           {actualSubtitles.map((sub) => {
             const trackSrcLang = getLangCode(sub.lang);
-            const subtitleUrl = getProxiedSubtitleUrl(sub.url); // Using proxied URL for subtitles
-            console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}, originalUrl=${sub.url}, proxiedUrl=${subtitleUrl}`);
+            // Skip rendering track if language code is undetermined (e.g., for 'thumbnails')
+            if (trackSrcLang === 'und') {
+                console.log(`[WatchPageContent] Skipping rendering track for lang: '${sub.lang}' as its code is 'und'.`);
+                return null;
+            }
+            const subtitleUrl = getProxiedSubtitleUrl(sub.url); 
+            console.log(`[WatchPageContent] Rendering track: lang='${sub.lang}', srcLang='${trackSrcLang}', default=${trackSrcLang === defaultTrackSrcLang}, originalUrl='${sub.url}', proxiedUrl='${subtitleUrl}'`);
             return (
               <track
-                key={subtitleUrl} // Use proxiedUrl for key as it's what's used in src
+                key={sub.url + sub.lang} 
                 src={subtitleUrl}
-                kind="subtitles" // Ensure kind is "subtitles"
+                kind="subtitles" 
                 label={sub.lang}
                 srcLang={trackSrcLang}
-                default={trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}
+                default={trackSrcLang === defaultTrackSrcLang}
                 crossOrigin="anonymous" 
               />
             );
           })}
+          <Captions className="vds-captions" /> 
           <DefaultVideoLayout icons={defaultLayoutIcons} />
         </MediaPlayer>
       )}
