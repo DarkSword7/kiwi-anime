@@ -145,7 +145,6 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
-    // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
     if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev') && !url.includes('animefreestream.vercel.app/')) {
         try {
             const fullUrl = new URL(url); 
@@ -168,12 +167,14 @@ function WatchPageContent({}: WatchPageContentProps) {
       const safeHeadersToSet: Record<string, string> = {};
       for (const key in streamingInfo.headers) {
         if (Object.prototype.hasOwnProperty.call(streamingInfo.headers, key)) {
-          if (streamingInfo.headers[key]) { 
+          const headerValue = streamingInfo.headers[key];
+          if (headerValue) { 
              const lowerKey = key.toLowerCase();
+             // Browsers block setting 'Referer' and 'User-Agent' directly on XHR from client-side JS
              if (lowerKey !== 'referer' && lowerKey !== 'user-agent') {
-                safeHeadersToSet[key] = streamingInfo.headers[key] as string;
+                safeHeadersToSet[key] = headerValue as string;
              } else {
-                console.warn(`[WatchPageContent] Skipping setting unsafe header '${key}' in HLS xhrSetup.`);
+                console.warn(`[WatchPageContent] Skipping setting unsafe header '${key}' in HLS xhrSetup as browsers block this.`);
              }
           }
         }
@@ -237,22 +238,27 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasPrevEpisode = currentEpNumber > 1 && animeDetails?.episodes?.some(ep => ep.number === currentEpNumber - 1);
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
-  const getLangCode = (langLabel: string): string => {
-    if (!langLabel) return 'und'; // undetermined
+const getLangCode = (langLabel: string): string => {
+    if (!langLabel) return 'und';
     let lowerLangLabel = langLabel.toLowerCase().trim();
 
-    // Handle complex labels like "Language - CR_Language(Region)"
-    const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/); // e.g., (brazil), (latin_america)
-    let region = '';
+    if (lowerLangLabel.includes('thumbnails')) return 'und'; // Explicitly mark thumbnails as undetermined
+
+    // More robust parsing for labels like "Language - CR_Language(Region)" or "Language (Region)"
+    const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/); // e.g., (brazil), (latin_america), (la)
+    let regionCode = '';
     if (regionMatch) {
-      region = regionMatch[1];
-      lowerLangLabel = lowerLangLabel.replace(regionMatch[0], '').trim(); // Remove region part for now
+        const region = regionMatch[1];
+        lowerLangLabel = lowerLangLabel.replace(regionMatch[0], '').trim(); // Remove region part
+        if (region === 'brazil' || region === 'br') regionCode = 'BR';
+        else if (region === 'latin_america' || region === 'la') regionCode = 'LA';
     }
     
-    const mainLangPart = lowerLangLabel.split(/[\s-]+/)[0]; // "portuguese" from "portuguese - cr_portuguese"
+    // Extract main language part, e.g., "portuguese" from "portuguese - cr_portuguese"
+    const mainLangPart = lowerLangLabel.split(/[\s-]+/)[0];
 
     const langNameMap: { [key: string]: string } = {
-      "english": "en", "ingles": "en",
+      "english": "en", "ingles": "en", "inglês": "en",
       "spanish": "es", "español": "es",
       "german": "de", "deutsch": "de",
       "french": "fr", "français": "fr",
@@ -272,20 +278,19 @@ function WatchPageContent({}: WatchPageContentProps) {
 
     let code = langNameMap[mainLangPart] || 'und';
 
-    if (code === 'pt' && region === 'brazil') {
-      code = 'pt-BR';
-    } else if (code === 'es' && region === 'latin_america') {
-      code = 'es-LA';
-    } else if (code === 'und' && (mainLangPart.length === 2 || mainLangPart.length === 3)) {
-      // If it's a 2 or 3 letter code already, assume it's correct
+    if (code === 'pt' && regionCode === 'BR') code = 'pt-BR';
+    else if (code === 'es' && regionCode === 'LA') code = 'es-LA';
+    else if (code === 'und' && (mainLangPart.length === 2 || mainLangPart.length === 3) && /^[a-z]{2,3}$/.test(mainLangPart)) {
+      // If it's a 2 or 3 letter code already and seems valid, assume it's correct
       code = mainLangPart;
     }
     
-    if (code === 'und') {
+    if (code === 'und' && !lowerLangLabel.includes('thumbnails')) {
         console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
     }
     return code;
   };
+
 
   const getProxiedSubtitleUrl = (originalUrl: string): string => {
     if (originalUrl.startsWith('http') && !originalUrl.includes('proxys.ciphertv.dev') && !originalUrl.includes('animefreestream.vercel.app/')) {
@@ -302,21 +307,26 @@ function WatchPageContent({}: WatchPageContentProps) {
     return originalUrl;
   };
   
+  const actualSubtitles = useMemo(() => {
+    return streamingInfo?.subtitles?.filter(sub => sub.lang && !sub.lang.toLowerCase().includes('thumbnails')) || [];
+  }, [streamingInfo?.subtitles]);
+  
   const defaultTrackSrcLang = useMemo(() => {
-    if (!streamingInfo?.subtitles || streamingInfo.subtitles.length === 0) return null;
+    if (!actualSubtitles || actualSubtitles.length === 0) return null;
     
-    const apiDefault = streamingInfo.subtitles.find(s => s.default === true);
+    const apiDefault = actualSubtitles.find(s => s.default === true);
     if (apiDefault) return getLangCode(apiDefault.lang);
 
-    const firstEnglish = streamingInfo.subtitles.find(s => getLangCode(s.lang) === 'en');
+    const firstEnglish = actualSubtitles.find(s => getLangCode(s.lang) === 'en');
     if (firstEnglish) return getLangCode(firstEnglish.lang);
     
-    if (streamingInfo.subtitles[0]) {
-      console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available track's language:", streamingInfo.subtitles[0].lang);
-      return getLangCode(streamingInfo.subtitles[0].lang); 
+    if (actualSubtitles[0]) {
+      const firstLangCode = getLangCode(actualSubtitles[0].lang);
+      console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available track's language:", actualSubtitles[0].lang, "Code:", firstLangCode);
+      return firstLangCode;
     }
     return null;
-  }, [streamingInfo?.subtitles]);
+  }, [actualSubtitles]);
 
 
   if (!episodeIdFromQuery && !isLoading) { 
@@ -349,6 +359,9 @@ function WatchPageContent({}: WatchPageContentProps) {
   }
   
   console.log("[WatchPageContent] About to render MediaPlayer. streamingInfo?.subtitles:", JSON.stringify(streamingInfo?.subtitles, null, 2));
+  console.log("[WatchPageContent] Filtered actualSubtitles:", JSON.stringify(actualSubtitles, null, 2));
+  console.log("[WatchPageContent] Default subtitle track language determined as:", defaultTrackSrcLang);
+
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -441,15 +454,15 @@ function WatchPageContent({}: WatchPageContentProps) {
           }}
         >
           <MediaProvider />
-          {streamingInfo?.subtitles?.map((sub) => {
+          {actualSubtitles.map((sub) => {
             const trackSrcLang = getLangCode(sub.lang);
-            const subtitleUrl = getProxiedSubtitleUrl(sub.url);
+            const subtitleUrl = getProxiedSubtitleUrl(sub.url); // Using proxied URL for subtitles
             console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}, originalUrl=${sub.url}, proxiedUrl=${subtitleUrl}`);
             return (
               <track
-                key={subtitleUrl} 
+                key={subtitleUrl} // Use proxiedUrl for key as it's what's used in src
                 src={subtitleUrl}
-                kind="subtitles"
+                kind="subtitles" // Ensure kind is "subtitles"
                 label={sub.lang}
                 srcLang={trackSrcLang}
                 default={trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}
