@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// const CIPHERTV_CORS_PROXY_URL = 'https://proxys.ciphertv.dev/proxy?url='; // Keep for video if needed
+const CIPHERTV_CORS_PROXY_URL = 'https://proxys.ciphertv.dev/proxy?url='; 
 
 interface WatchPageContentProps {
   // No episodeId prop needed here, will be fetched from searchParams
@@ -145,43 +145,67 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
-    // No proxy for manifest for now, relying on kwikie.ru to have open CORS for manifest if possible
-    // If video segments need proxy, HLS config will handle that.
-    // If manifest itself needs proxy and current one fails, a different proxy solution is needed.
-    console.log("[WatchPageContent] Using direct URL for player manifest (no proxy):", url);
+    // Apply CORS proxy if it's an http/https URL and not already proxied or from a known-good local/API domain
+    if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev') && !url.includes('animefreestream.vercel.app/')) {
+        try {
+            const fullUrl = new URL(url); 
+            url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(fullUrl.toString())}`;
+            console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
+        } catch (e) {
+            console.error("[WatchPageContent] Invalid URL for proxying:", currentSource.url, e);
+            return currentSource.url; // Fallback to original if URL parsing fails
+        }
+    } else {
+        console.log("[WatchPageContent] Using direct URL for player manifest (no proxy or already proxied):", url);
+    }
     return url;
   }, [currentSource]);
 
-
-  const hlsConfig = useMemo(() => {
-    if (currentSource?.isM3U8 && streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0) {
+  useEffect(() => {
+    console.log("[WatchPageContent] HLS Effect Triggered. hlsProvider:", hlsProvider, "streamingInfo.headers:", streamingInfo?.headers, "currentSource.isM3U8:", currentSource?.isM3U8);
+    if (hlsProvider && streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0 && currentSource?.isM3U8) {
       const apiHeaders = { ...streamingInfo.headers };
-      Object.keys(apiHeaders).forEach((key) => {
-        if (apiHeaders[key] == null || apiHeaders[key] === '') delete apiHeaders[key];
+      // Remove null/undefined/empty headers and filter for common ones if necessary
+      Object.keys(apiHeaders).forEach(key => {
+        if (apiHeaders[key] == null || apiHeaders[key] === '') {
+          delete apiHeaders[key];
+        }
       });
 
       if (Object.keys(apiHeaders).length > 0) {
-        console.log('[WatchPageContent] Preparing HLS config with custom headers:', JSON.stringify(apiHeaders));
-        return {
+        console.log('[WatchPageContent] Configuring HLS provider with custom headers:', JSON.stringify(apiHeaders));
+        hlsProvider.config = {
+          ...hlsProvider.config, // Preserve existing HLS config
           xhrSetup: (xhr: XMLHttpRequest, requestUrl: string) => {
-            console.log(`[HLS xhrSetup via hlsConfig prop for ${requestUrl}] Applying headers:`, JSON.stringify(apiHeaders));
+            console.log(`[WatchPageContent] HLS xhrSetup for ${requestUrl}. Applying headers:`, JSON.stringify(apiHeaders));
             for (const headerKey in apiHeaders) {
               if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
-                xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
+                 xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
               }
             }
           }
         };
+      } else {
+        console.log('[WatchPageContent] No valid API headers to apply to HLS config.');
+         // Ensure xhrSetup is cleared if no headers are to be applied
+        if (hlsProvider.config?.xhrSetup) {
+            delete hlsProvider.config.xhrSetup;
+            console.log('[WatchPageContent] Cleared existing HLS xhrSetup.');
+        }
       }
+    } else if (hlsProvider && hlsProvider.config?.xhrSetup) {
+        // Clear xhrSetup if conditions are not met (e.g., not M3U8, or no headers)
+        delete hlsProvider.config.xhrSetup;
+        console.log('[WatchPageContent] Cleared existing HLS xhrSetup as conditions not met.');
+    } else if (!hlsProvider) {
+        console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers.');
     }
-    console.log('[WatchPageContent] No custom HLS config prepared (no headers or not M3U8).');
-    return undefined; // Return undefined if no custom config is needed
-  }, [streamingInfo, currentSource]);
+  }, [hlsProvider, streamingInfo, currentSource]);
 
 
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
-    setHlsProvider(null); // Reset HLS provider to ensure re-initialization if necessary
+    setHlsProvider(null); 
     setSelectedServer(newServer);
   };
 
@@ -196,7 +220,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     if (targetEpisode) {
-      setHlsProvider(null); // Reset HLS provider
+      setHlsProvider(null); 
       router.push(`/watch?ep=${encodeURIComponent(targetEpisode.id)}&animeId=${animeId}&epNum=${targetEpisode.number}`);
     }
   };
@@ -213,8 +237,8 @@ function WatchPageContent({}: WatchPageContentProps) {
       "french": "fr", "français": "fr",
       "portuguese (brazilian)": "pt-BR", "portuguese": "pt", "português": "pt",
       "arabic": "ar", "russian": "ru", "italian": "it",
-      "japanese": "ja", "default": "en",
-      // Add more mappings as needed
+      "japanese": "ja", "default": "en", "indonesian": "id", "thai": "th",
+      "vietnamese": "vi", "malay": "ms", "hindi": "hi",
     };
     if (langMap[lowerLangLabel]) return langMap[lowerLangLabel];
     if (lowerLangLabel.length === 2 || (lowerLangLabel.length === 5 && lowerLangLabel[2] === '-')) return lowerLangLabel; 
@@ -222,10 +246,18 @@ function WatchPageContent({}: WatchPageContentProps) {
     return 'und'; // Undetermined
   };
 
-  // Attempting direct load for subtitles; proxying VTTs can be problematic.
-  // The VTT server (e.g., s.megastatics.com) needs to have correct CORS headers.
-  const getSubtitleUrl = (originalUrl: string): string => {
-    console.log("[WatchPageContent] Using direct URL for subtitle:", originalUrl);
+  const getProxiedSubtitleUrl = (originalUrl: string): string => {
+    if (originalUrl.startsWith('http') && !originalUrl.includes('proxys.ciphertv.dev')) {
+        try {
+            const proxied = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(new URL(originalUrl).toString())}`;
+            console.log("[WatchPageContent] Using proxied URL for subtitle:", proxied);
+            return proxied;
+        } catch(e) {
+             console.error("[WatchPageContent] Invalid subtitle URL for proxying:", originalUrl, e);
+            return originalUrl;
+        }
+    }
+    console.log("[WatchPageContent] Using direct URL for subtitle (not proxying):", originalUrl);
     return originalUrl;
   };
   
@@ -345,21 +377,30 @@ function WatchPageContent({}: WatchPageContentProps) {
           title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
           src={{ src: playerSrcUrl, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
-          crossOrigin // For video if needed, and also for text tracks if loaded from different origin
+          crossOrigin 
           playsInline
-          hlsConfig={hlsConfig} // Apply HLS config directly
-          onTextTracksChange={(tracks, event) => { // Vidstack event for when text tracks change
+          onProviderChange={(providerAdapter) => {
+            console.log("[WatchPageContent] onProviderChange triggered with provider:", providerAdapter);
+            if (providerAdapter?.type === 'hls') {
+                console.log("[WatchPageContent] HLS provider instance obtained:", providerAdapter);
+                setHlsProvider(providerAdapter as HLSProvider);
+            } else {
+                 console.log("[WatchPageContent] Non-HLS provider or null provider. Clearing HLS instance.");
+                setHlsProvider(null);
+            }
+          }}
+          onTextTracksChange={(tracks, event) => { 
             console.log('[Vidstack] TextTracksChange:', tracks.map(t => ({label: t.label, language: t.language, mode: t.mode, kind: t.kind, id: t.id, src: t.src })));
           }}
-          onTextTrackChange={(track, event) => { // Vidstack event for when the selected text track changes
+          onTextTrackChange={(track, event) => { 
             console.log('[Vidstack] TextTrackChange (selected):', track ? {label: track.label, language: track.language, mode: track.mode, kind: track.kind, id: track.id, src: track.src } : null);
           }}
         >
           <MediaProvider />
           {streamingInfo?.subtitles?.map((sub) => {
             const trackSrcLang = getLangCode(sub.lang);
-            const subtitleUrl = getSubtitleUrl(sub.url); // Get direct URL
-            console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang}, url=${subtitleUrl}`);
+            const subtitleUrl = getProxiedSubtitleUrl(sub.url); 
+            console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang}, originalUrl=${sub.url}, proxiedUrl=${subtitleUrl}`);
             return (
               <track
                 key={subtitleUrl + sub.lang} 
@@ -368,7 +409,7 @@ function WatchPageContent({}: WatchPageContentProps) {
                 label={sub.lang}
                 srcLang={trackSrcLang}
                 default={trackSrcLang === defaultTrackSrcLang}
-                crossOrigin="anonymous" // Important for fetching VTT from different origins
+                crossOrigin="anonymous" 
               />
             );
           })}
