@@ -2,11 +2,10 @@
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
-import { MediaPlayer, MediaProvider, type MediaProviderAdapter } from '@vidstack/react';
-import { type HLSProvider } from '@vidstack/react/providers/hls';
+import { MediaPlayer, MediaProvider, type MediaProviderAdapter, type HLSProvider } from '@vidstack/react';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
-import { searchOpenSubtitles, type OpenSubtitlesResult } from '@/services/opensubtitles-service';
+import { searchSubdlSubtitles, type SubdlFormattedResult } from '@/services/subdl-service'; // Updated import
 import type { StreamingLinks, AnimeInfo, StreamingSource, SubtitleTrack } from '@/types/anime';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -42,8 +41,8 @@ function WatchPageContent({}: WatchPageContentProps) {
   const [animeDetails, setAnimeDetails] = useState<AnimeInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingOpenSubtitles, setIsLoadingOpenSubtitles] = useState(false);
-  const [openSubtitlesResults, setOpenSubtitlesResults] = useState<OpenSubtitlesResult[]>([]);
+  const [isLoadingSubdl, setIsLoadingSubdl] = useState(false); // Updated state name
+  const [subdlResults, setSubdlResults] = useState<SubdlFormattedResult[]>([]); // Updated state type and name
   const [selectedServer, setSelectedServer] = useState<string>('vidstreaming'); 
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
   const [hlsProvider, setHlsProvider] = useState<HLSProvider | null>(null);
@@ -69,9 +68,9 @@ function WatchPageContent({}: WatchPageContentProps) {
       setIsLoading(true);
       setError(null);
       setStreamingInfo(null); 
-      setOpenSubtitlesResults([]); // Clear previous OpenSubtitles results
+      setSubdlResults([]); // Clear previous SubDL results
       setSelectedQuality(undefined);
-      // Do not reset hlsProvider here, it's tied to the MediaPlayer lifecycle
+      setHlsProvider(null);
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -130,26 +129,26 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
   }, [episodeIdFromQuery, animeId, selectedServer]); 
 
-  const handleFetchOpenSubtitles = async () => {
-    if (!animeDetails?.title || !currentEpNumber) {
-      alert("Anime details or episode number not available to search OpenSubtitles.");
+  const handleFetchSubdlSubtitles = async () => { // Updated function name
+    if (!animeDetails?.title) { // Only need title for SubDL basic search
+      alert("Anime details not available to search SubDL.");
       return;
     }
-    setIsLoadingOpenSubtitles(true);
-    setOpenSubtitlesResults([]);
+    setIsLoadingSubdl(true);
+    setSubdlResults([]);
     try {
-      // Note: Season number might not be readily available from current animeDetails
-      // For simplicity, we'll pass undefined if not available.
-      const results = await searchOpenSubtitles(animeDetails.title, currentEpNumber, undefined);
-      setOpenSubtitlesResults(results);
+      // For SubDL, we primarily search by film_name (anime title).
+      // Season/episode specific search might be more complex or a two-step process not covered by basic SubDL docs.
+      const results = await searchSubdlSubtitles(animeDetails.title, currentEpNumber, undefined, "en,es,fr,de,it,pt,ru"); // Request multiple common languages
+      setSubdlResults(results);
       if (results.length === 0) {
-        alert("No subtitles found on OpenSubtitles for this episode.");
+        alert("No subtitles found on SubDL for this anime title.");
       }
     } catch (e: any) {
-      console.error("[WatchPageContent] Error fetching from OpenSubtitles:", e);
-      alert("Failed to fetch subtitles from OpenSubtitles.");
+      console.error("[WatchPageContent] Error fetching from SubDL:", e);
+      alert("Failed to fetch subtitles from SubDL.");
     } finally {
-      setIsLoadingOpenSubtitles(false);
+      setIsLoadingSubdl(false);
     }
   };
 
@@ -198,6 +197,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       for (const key in streamingInfo.headers) {
         if (Object.prototype.hasOwnProperty.call(streamingInfo.headers, key)) {
           const lowerKey = key.toLowerCase();
+          // Browsers block setting 'Referer' and 'User-Agent' from client-side XHR for security reasons
           if (lowerKey !== 'referer' && lowerKey !== 'user-agent' && streamingInfo.headers[key]) {
              safeHeadersToSet[key] = streamingInfo.headers[key] as string;
           }
@@ -224,9 +224,9 @@ function WatchPageContent({}: WatchPageContentProps) {
       }
     } else if (hlsProvider && hlsProvider.config?.xhrSetup) {
         delete hlsProvider.config.xhrSetup;
-        console.log('[WatchPageContent] Cleared existing HLS xhrSetup as conditions not met.');
+        console.log('[WatchPageContent] Cleared existing HLS xhrSetup as conditions not met for applying custom headers.');
     } else if (!hlsProvider) {
-        console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers.');
+        // console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers.');
     }
   }, [hlsProvider, streamingInfo, currentSource]);
 
@@ -265,23 +265,25 @@ function WatchPageContent({}: WatchPageContentProps) {
     
     const langMap: { [key: string]: string } = {
       "english": "en", "en": "en", "eng": "en",
-      "spanish": "es", "es": "es", "español": "es",
-      "german": "de", "de": "de", "deutsch": "de",
-      "french": "fr", "fr": "fr", "français": "fr",
-      "portuguese": "pt", "pt": "pt", "português": "pt",
-      "arabic": "ar", "ar": "ar",
-      "russian": "ru", "ru": "ru",
-      "italian": "it", "it": "it",
+      "spanish": "es", "es": "es", "español": "es", "spanish - cr_spanish": "es", "spanish - cr_spanish(latin_america)": "es-LA",
+      "german": "de", "de": "de", "deutsch": "de", "german - cr_german": "de",
+      "french": "fr", "fr": "fr", "français": "fr", "french - cr_french": "fr",
+      "portuguese": "pt", "pt": "pt", "português": "pt", "portuguese - cr_portuguese(brazil)": "pt-BR",
+      "arabic": "ar", "ar": "ar", "arabic - cr_arabic": "ar",
+      "russian": "ru", "ru": "ru", "russian - cr_russian": "ru",
+      "italian": "it", "it": "it", "italian - cr_italian": "it",
       "japanese": "ja", "ja": "ja",
-      "default": "en", 
       "indonesian": "id", "id": "id",
       "thai": "th", "th": "th",
       "vietnamese": "vi", "vi": "vi",
       "malay": "ms", "ms": "ms",
       "hindi": "hi", "hi": "hi",
+      // Add more mappings as needed
     };
 
     if (langMap[primaryLang]) return langMap[primaryLang];
+    if (langMap[lowerLangLabel]) return langMap[lowerLangLabel]; // Check full label
+    
     // Check for ISO 639-1 (2-letter) or ISO 639-2 (3-letter) or common variants
     if (primaryLang.length === 2 || primaryLang.length === 3 || (primaryLang.length === 5 && primaryLang[2] === '-')) {
         return primaryLang;
@@ -306,7 +308,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     if (firstEnglish) return getLangCode(firstEnglish.lang);
     
     if (streamingInfo.subtitles[0]) {
-      console.log("[WatchPageContent] No default or English subtitle track found, defaulting to first available track's language:", streamingInfo.subtitles[0].lang);
+      console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available track's language:", streamingInfo.subtitles[0].lang);
       return getLangCode(streamingInfo.subtitles[0].lang); 
     }
     return null;
@@ -343,6 +345,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   }
   
   console.log("[WatchPageContent] About to render MediaPlayer. API-provided subtitles:", JSON.stringify(streamingInfo?.subtitles, null, 2));
+  console.log("[WatchPageContent] About to render MediaPlayer. SubDL results:", JSON.stringify(subdlResults, null, 2));
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -442,7 +445,7 @@ function WatchPageContent({}: WatchPageContentProps) {
             console.log(`[WatchPageContent] Rendering API subtitle track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang}, originalUrl=${sub.url}, directUrl=${subtitleUrl}`);
             return (
               <track
-                key={sub.url + sub.lang} 
+                key={sub.url} 
                 src={subtitleUrl}
                 kind="subtitles"
                 label={sub.lang}
@@ -486,53 +489,57 @@ function WatchPageContent({}: WatchPageContentProps) {
 
       <Separator className="my-8" />
 
-      {/* OpenSubtitles Section */}
+      {/* SubDL Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
             <SearchCheck className="mr-2 h-5 w-5 text-primary" />
-            External Subtitles (OpenSubtitles)
+            External Subtitles (SubDL)
           </CardTitle>
           <CardDescription>
-            If built-in subtitles are missing or incorrect, try searching OpenSubtitles.org.
-            These are typically SRT files that you'll need to download.
+            If built-in subtitles are missing or incorrect, try searching SubDL.com.
+            These are typically SRT/VTT files that you'll need to download.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button
-            onClick={handleFetchOpenSubtitles}
-            disabled={isLoadingOpenSubtitles || !animeDetails || !currentEpNumber}
+            onClick={handleFetchSubdlSubtitles}
+            disabled={isLoadingSubdl || !animeDetails || !animeDetails.title}
             className="w-full sm:w-auto"
           >
-            {isLoadingOpenSubtitles ? (
+            {isLoadingSubdl ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <SearchCheck className="mr-2 h-4 w-4" />
             )}
-            Search OpenSubtitles for this Episode
+            Search SubDL for this Anime
           </Button>
 
-          {openSubtitlesResults.length > 0 && (
+          {subdlResults.length > 0 && (
             <div className="mt-6 space-y-3">
-              <h4 className="font-semibold text-foreground">Available Subtitles:</h4>
+              <h4 className="font-semibold text-foreground">Available Subtitles from SubDL:</h4>
               <ul className="list-disc list-inside space-y-2 pl-2 max-h-60 overflow-y-auto border p-3 rounded-md bg-background/50">
-                {openSubtitlesResults.map((sub, index) => (
+                {subdlResults.map((sub, index) => (
                   <li key={index} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                     <a
                       href={sub.downloadUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 text-primary hover:underline"
-                      title={`Download ${sub.filename || sub.langName} subtitles`}
+                      title={`Download ${sub.releaseName || sub.langName} subtitles`}
                     >
                       <DownloadCloud className="h-4 w-4 shrink-0" />
-                      {sub.langName} {sub.filename ? `(${sub.filename})` : ''} {sub.score ? `(Score: ${sub.score})` : ''}
+                       {sub.langName} {sub.releaseName ? `(${sub.releaseName})` : ''}
                     </a>
                   </li>
                 ))}
               </ul>
             </div>
           )}
+           {isLoadingSubdl && <p className="mt-4 text-muted-foreground">Searching SubDL...</p>}
+           {!isLoadingSubdl && subdlResults.length === 0 && animeDetails?.title && (
+             <p className="mt-4 text-muted-foreground">No subtitles found on SubDL for "{animeDetails.title}".</p>
+           )}
         </CardContent>
       </Card>
     </div>
