@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { Kiwi, Home, Search as SearchIcon, Wand2, Menu } from 'lucide-react';
+import { Kiwi, Home, Search as SearchIcon, Menu } from 'lucide-react'; // Removed Wand2
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -17,8 +17,6 @@ export function Header() {
     e.preventDefault();
     if (searchQuery.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-      // Optionally clear input after search if you want:
-      // setSearchQuery(''); 
     }
   };
 
@@ -64,11 +62,7 @@ export function Header() {
                 Search
               </Link>
             </Button>
-            <Button variant="ghost" asChild className="hover:bg-accent/50 hover:text-accent-foreground">
-              <Link href="/suggest" className="text-sm font-medium transition-colors">
-                AI Suggester
-              </Link>
-            </Button>
+            {/* Removed AI Suggester Link */}
           </nav>
         </div>
 
@@ -99,9 +93,7 @@ export function Header() {
                 <Link href="/search" className="text-lg font-medium hover:text-primary transition-colors flex items-center">
                   <SearchIcon className="mr-2 h-5 w-5" /> Search
                 </Link>
-                <Link href="/suggest" className="text-lg font-medium hover:text-primary transition-colors flex items-center">
-                  <Wand2 className="mr-2 h-5 w-5" /> AI Suggester
-                </Link>
+                {/* Removed AI Suggester Link from Mobile Menu */}
               </nav>
             </SheetContent>
           </Sheet>
