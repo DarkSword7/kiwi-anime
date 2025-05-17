@@ -46,13 +46,13 @@ export function AnimeSuggestionForm() {
   }
 
   return (
-    <Card className="w-full max-w-lg mx-auto shadow-xl">
+    <Card className="w-full max-w-lg mx-auto shadow-xl bg-card border-border/70">
       <CardHeader>
-        <CardTitle className="flex items-center text-2xl">
+        <CardTitle className="flex items-center text-2xl text-foreground">
           <Wand2 className="mr-2 h-6 w-6 text-primary" />
           AI Anime Suggester
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-muted-foreground">
           Enter an anime title you like, and our AI will suggest similar ones!
         </CardDescription>
       </CardHeader>
@@ -64,9 +64,14 @@ export function AnimeSuggestionForm() {
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="animeTitle" className="text-base">Anime Title</FormLabel>
+                  <FormLabel htmlFor="animeTitle" className="text-base text-foreground/90">Anime Title</FormLabel>
                   <FormControl>
-                    <Input id="animeTitle" placeholder="e.g., Attack on Titan" {...field} className="text-base py-6" />
+                    <Input 
+                      id="animeTitle" 
+                      placeholder="e.g., Attack on Titan" 
+                      {...field} 
+                      className="text-base py-6 bg-input border-border focus:border-primary placeholder-muted-foreground" 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -80,7 +85,7 @@ export function AnimeSuggestionForm() {
             )}
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={isLoading} className="w-full text-lg py-6">
+            <Button type="submit" disabled={isLoading} className="w-full text-lg py-6 bg-primary hover:bg-accent text-primary-foreground">
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -98,7 +103,7 @@ export function AnimeSuggestionForm() {
       </Form>
 
       {suggestions && suggestions.length > 0 && (
-        <div className="p-6 border-t">
+        <div className="p-6 border-t border-border/50">
           <h3 className="text-xl font-semibold mb-4 text-primary">Here are some suggestions:</h3>
           <ul className="space-y-2 list-disc list-inside pl-2">
             {suggestions.map((suggestion, index) => (
@@ -108,7 +113,7 @@ export function AnimeSuggestionForm() {
         </div>
       )}
       {suggestions && suggestions.length === 0 && !error && (
-         <div className="p-6 border-t text-center text-muted-foreground">
+         <div className="p-6 border-t border-border/50 text-center text-muted-foreground">
             <p>No suggestions found based on your input. Try a different title!</p>
           </div>
       )}

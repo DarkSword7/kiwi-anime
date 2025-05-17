@@ -2,7 +2,7 @@ import { AnimeSuggestionForm } from '@/components/AnimeSuggestionForm';
 
 export default function SuggestPage() {
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center py-8">
       <div className="text-center mb-10">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-primary mb-3">
           Discover Your Next Binge

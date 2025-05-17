@@ -1,51 +1,49 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import type { AnimeSearchResult } from '@/types/anime'; // Using AnimeSearchResult as it's what search provides
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import type { AnimeSearchResult } from '@/types/anime';
+import { Card, CardContent } from '@/components/ui/card'; // Removed CardFooter, CardHeader, CardTitle
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays } from 'lucide-react';
+import { Tv } from 'lucide-react'; // For episode count example if available
 
 interface AnimeCardProps {
-  anime: AnimeSearchResult; // Changed to AnimeSearchResult
+  anime: AnimeSearchResult;
 }
 
 export function AnimeCard({ anime }: AnimeCardProps) {
-  // Fallback image in case API image is invalid or missing
-  const imageUrl = anime.image || 'https://placehold.co/300x450.png';
-  const dataAiHint = anime.image ? "anime poster" : "placeholder anime";
+  const imageUrl = anime.image || 'https://placehold.co/200x300.png?text=No+Image';
+  const dataAiHint = anime.image ? "anime poster portrait" : "placeholder anime";
 
   return (
     <Link href={`/anime/${anime.id}`} passHref>
-      <Card className="h-full flex flex-col overflow-hidden hover:shadow-xl transition-shadow duration-300 ease-in-out cursor-pointer group">
-        <CardHeader className="p-0 relative aspect-[2/3]">
+      <Card className="h-full flex flex-col bg-card border-border/50 rounded-lg overflow-hidden group transition-all duration-300 ease-in-out hover:shadow-xl hover:border-primary/50 hover:scale-[1.02]">
+        <div className="relative aspect-[2/3] w-full overflow-hidden">
           <Image
             src={imageUrl}
-            alt={`Cover image for ${anime.title}`}
+            alt={anime.title}
             layout="fill"
             objectFit="cover"
-            className="rounded-t-lg group-hover:scale-105 transition-transform duration-300"
+            className="transition-transform duration-300 group-hover:scale-105"
             data-ai-hint={dataAiHint}
-            unoptimized={!anime.image} // Use unoptimized for placeholder if API image fails
+            unoptimized={!anime.image}
           />
-        </CardHeader>
-        <CardContent className="p-4 flex-grow">
-          <CardTitle className="text-lg font-semibold mb-2 leading-tight truncate" title={anime.title}>
+           {/* Overlay for title could go here if design needs it on image */}
+        </div>
+        <CardContent className="p-3 space-y-1">
+          <h3 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors" title={anime.title}>
             {anime.title}
-          </CardTitle>
-          {anime.releaseDate && (
-            <div className="flex items-center text-xs text-muted-foreground mb-2">
-              <CalendarDays className="w-3.5 h-3.5 mr-1" />
-              <span>{anime.releaseDate}</span>
-            </div>
-          )}
+          </h3>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            {anime.type && <span className="capitalize">{anime.type}</span>}
+            {anime.subOrDub && (
+              <Badge 
+                variant={anime.subOrDub.toLowerCase() === 'dub' ? 'secondary' : 'outline'} 
+                className="text-[10px] px-1.5 py-0.5 border-primary/30 text-primary/80"
+              >
+                {anime.subOrDub.toUpperCase()}
+              </Badge>
+            )}
+          </div>
         </CardContent>
-        <CardFooter className="p-4 pt-0">
-          {anime.subOrDub && (
-            <Badge variant={anime.subOrDub === 'dub' ? 'secondary' : 'outline'} className="text-xs capitalize">
-              {anime.subOrDub}
-            </Badge>
-          )}
-        </CardFooter>
       </Card>
     </Link>
   );

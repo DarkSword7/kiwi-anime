@@ -6,7 +6,7 @@ import { searchAnime } from '@/services/anime-service';
 import { AnimeCard } from '@/components/AnimeCard';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search as SearchIcon, X, Loader2 } from 'lucide-react';
+import { Search as SearchIcon, X, Loader2, Film } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 export function SearchComponent() {
@@ -48,9 +48,9 @@ export function SearchComponent() {
       setHasNextPage(apiHasNextPage);
     } catch (error) {
       console.error("Search failed:", error);
-      setResults([]); // Ensure results is an array on error
+      setResults([]); 
       setHasNextPage(false);
-      setCurrentPage(1); // Reset page on error
+      setCurrentPage(1);
     } finally {
       setIsLoading(false);
       setHasSearched(true);
@@ -70,26 +70,24 @@ export function SearchComponent() {
   };
   
   useEffect(() => {
-    // This effect now correctly clears results when searchTerm is empty *after* a search might have happened.
     if (searchTerm.trim() === '' && results.length > 0) { 
       setResults([]);
-      setHasSearched(false); // Reset hasSearched if search term is cleared
+      setHasSearched(false); 
       setHasNextPage(false);
       setCurrentPage(1);
     }
-  }, [searchTerm, results.length]); // Depend on searchTerm and results.length to avoid unnecessary runs
+  }, [searchTerm, results.length]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-4xl mx-auto">
       <form onSubmit={handleSearchSubmit} className="flex gap-2 items-center">
         <div className="relative flex-grow">
           <Input
             type="search"
-            placeholder="Search anime by title..."
+            placeholder="Search by title (e.g., One Piece, Naruto)..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              // If the input is cleared, immediately reset search state.
               if (e.target.value.trim() === '') {
                 setResults([]);
                 setHasSearched(false);
@@ -97,14 +95,15 @@ export function SearchComponent() {
                 setCurrentPage(1);
               }
             }}
-            className="pr-10 text-base"
+            className="h-12 pl-10 pr-12 text-base bg-input border-border focus:border-primary placeholder-muted-foreground"
           />
+           <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           {searchTerm && (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-2 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSearchTerm('');
                 setResults([]);
@@ -113,12 +112,12 @@ export function SearchComponent() {
                 setCurrentPage(1);
               }}
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
               <span className="sr-only">Clear search</span>
             </Button>
           )}
         </div>
-        <Button type="submit" variant="default" size="lg" disabled={isLoading && searchTerm.trim() !== ''}>
+        <Button type="submit" variant="default" size="lg" disabled={isLoading && searchTerm.trim() !== ''} className="h-12 px-6 text-base">
            {isLoading && searchTerm.trim() !== '' && results.length === 0 && currentPage === 1 ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <SearchIcon className="mr-2 h-5 w-5" />}
           Search
         </Button>
@@ -133,7 +132,7 @@ export function SearchComponent() {
 
       {hasSearched && !isLoading && results.length === 0 && searchTerm.trim() !== '' && (
         <div className="text-center py-10">
-          <SearchIcon className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+          <Film className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
           <p className="text-xl text-muted-foreground">No results found for "{searchTerm}".</p>
           <p className="text-sm text-muted-foreground">Try a different keyword or check your spelling.</p>
         </div>
@@ -141,15 +140,15 @@ export function SearchComponent() {
 
       {results.length > 0 && (
         <>
-          <h2 className="text-2xl font-semibold">Search Results ({results.length}{hasNextPage ? '+' : ''})</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-6">
+          <h2 className="text-2xl font-semibold text-foreground">Search Results ({results.length}{hasNextPage ? '+' : ''})</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 mt-6">
             {results.map((anime) => (
               <AnimeCard key={anime.id} anime={anime} />
             ))}
           </div>
           {hasNextPage && (
             <div className="mt-8 text-center">
-              <Button onClick={handleLoadMore} disabled={isLoading} variant="outline" size="lg">
+              <Button onClick={handleLoadMore} disabled={isLoading} variant="outline" size="lg" className="border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground">
                 {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                 Load More
               </Button>
@@ -167,4 +166,3 @@ export function SearchComponent() {
     </div>
   );
 }
-

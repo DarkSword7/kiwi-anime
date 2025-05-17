@@ -1,41 +1,94 @@
 import Link from 'next/link';
-import { Tv2, Home, Search, Wand2 } from 'lucide-react';
+import { Kiwi, Home, Search as SearchIcon, Wand2, Menu } from 'lucide-react'; // Changed Tv2 to Kiwi, Search to SearchIcon
 import { Button } from '@/components/ui/button';
-import { Separator } from './ui/separator';
+import { Input } from '@/components/ui/input'; // Added Input for search bar
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // For mobile menu
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-16 items-center justify-between">
         <Link href="/" className="mr-6 flex items-center space-x-2">
-          <Tv2 className="h-6 w-6 text-primary" />
-          <span className="font-bold sm:inline-block text-lg">
-            AniWave Lite
+          {/* Using a generic Kiwi icon as a placeholder */}
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary h-7 w-7">
+            <path d="M15.34 10.66a4 4 0 1 0-8.54-3.38"/>
+            <path d="M8.43 10.08c-.19.64-.23 1.4.13 2.19A4 4 0 0 0 16.71 8.7"/>
+            <path d="m10.5 10.5-2.02 2.02"/>
+            <path d="M13.5 13.5 16 16"/>
+            <path d="M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Z"/>
+            <path d="M12 17a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
+            <path d="M15 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
+            <path d="M9 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
+          </svg>
+          <span className="font-bold sm:inline-block text-xl text-foreground">
+            Kiwi Anime
           </span>
         </Link>
-        <nav className="flex flex-1 items-center space-x-2 sm:space-x-4">
-          <Button variant="ghost" asChild>
-            <Link href="/" className="text-sm font-medium transition-colors hover:text-primary">
-              <Home className="mr-2 h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">Home</span>
-            </Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/search" className="text-sm font-medium transition-colors hover:text-primary">
-              <Search className="mr-2 h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">Search</span>
-            </Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/suggest" className="text-sm font-medium transition-colors hover:text-primary">
-              <Wand2 className="mr-2 h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">AI Suggester</span>
-            </Link>
-          </Button>
-        </nav>
-        {/* Placeholder for future elements like theme toggle or user profile */}
+
+        {/* Desktop Navigation & Search */}
+        <div className="hidden md:flex flex-1 items-center justify-end space-x-2">
+          <div className="relative w-full max-w-xs lg:max-w-sm xl:max-w-md mr-4">
+            <Input
+              type="search"
+              placeholder="Search anime..."
+              className="h-9 pl-8 pr-4 text-sm bg-input border-border focus:bg-background focus:border-primary"
+            />
+            <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
+          <nav className="flex items-center space-x-1">
+            <Button variant="ghost" asChild className="hover:bg-accent/50 hover:text-accent-foreground">
+              <Link href="/" className="text-sm font-medium transition-colors">
+                Home
+              </Link>
+            </Button>
+            <Button variant="ghost" asChild className="hover:bg-accent/50 hover:text-accent-foreground">
+              <Link href="/search" className="text-sm font-medium transition-colors">
+                Search
+              </Link>
+            </Button>
+            <Button variant="ghost" asChild className="hover:bg-accent/50 hover:text-accent-foreground">
+              <Link href="/suggest" className="text-sm font-medium transition-colors">
+                AI Suggester
+              </Link>
+            </Button>
+          </nav>
+          {/* Placeholder for future elements like theme toggle or user profile */}
+          {/* <Button variant="outline" size="sm" className="ml-4">Sign In</Button> */}
+        </div>
+
+        {/* Mobile Navigation Trigger */}
+        <div className="md:hidden">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-6 w-6" />
+                <span className="sr-only">Toggle menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[280px] bg-background p-6">
+              <nav className="flex flex-col space-y-4 mt-6">
+                 <div className="relative w-full mb-4">
+                    <Input
+                    type="search"
+                    placeholder="Search anime..."
+                    className="h-9 pl-8 pr-4 text-sm bg-input border-border focus:bg-background focus:border-primary"
+                    />
+                    <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <Link href="/" className="text-lg font-medium hover:text-primary transition-colors flex items-center">
+                  <Home className="mr-2 h-5 w-5" /> Home
+                </Link>
+                <Link href="/search" className="text-lg font-medium hover:text-primary transition-colors flex items-center">
+                  <SearchIcon className="mr-2 h-5 w-5" /> Search
+                </Link>
+                <Link href="/suggest" className="text-lg font-medium hover:text-primary transition-colors flex items-center">
+                  <Wand2 className="mr-2 h-5 w-5" /> AI Suggester
+                </Link>
+              </nav>
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
-      <Separator />
     </header>
   );
 }

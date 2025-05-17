@@ -12,8 +12,8 @@ import '@vidstack/react/player/styles/default/layouts/video.css';
 
 
 export const metadata: Metadata = {
-  title: 'AniWave Lite - Your Anime Companion',
-  description: 'Discover, search, and get AI suggestions for anime.',
+  title: 'Kiwi Anime - Your Anime Companion',
+  description: 'Discover, search, and get AI suggestions for anime with Kiwi Anime.',
 };
 
 export default function RootLayout({
@@ -23,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
-      <body className={`font-sans antialiased flex flex-col min-h-screen`}>
+      <body className={`font-sans antialiased flex flex-col min-h-screen bg-background text-foreground`}>
         <Header />
         <main className="flex-grow container mx-auto px-4 py-8">
           {children}
