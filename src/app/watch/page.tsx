@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const CORS_PROXY_URL = 'https://cors.consumet.stream/';
+// const CORS_PROXY_URL = 'https://cors.consumet.stream/'; // Commented out as it's not resolving
 
 interface WatchPageContentProps {
   // No episodeId prop needed here, will be fetched from searchParams
@@ -42,7 +42,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
   const [hlsProviderInstance, setHlsProviderInstance] = useState<HlsProvider | null>(null);
 
-  const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape"]; // Confirm these are valid for AnimePahe via Consumet
+  const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape"]; 
 
   console.log(`[WatchPageContent] Initializing. episodeIdFromQuery: ${episodeIdFromQuery}, animeId: ${animeId}, selectedServer: ${selectedServer}`);
   if (!episodeIdFromQuery) {
@@ -61,9 +61,9 @@ function WatchPageContent({}: WatchPageContentProps) {
       
       setIsLoading(true);
       setError(null);
-      setStreamingInfo(null); // Reset streaming info
-      setSelectedQuality(undefined); // Reset quality
-      setHlsProviderInstance(null); // Reset HLS provider instance
+      setStreamingInfo(null); 
+      setSelectedQuality(undefined); 
+      // setHlsProviderInstance(null); // Let onProviderChange handle this reset
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -71,11 +71,10 @@ function WatchPageContent({}: WatchPageContentProps) {
 
         if (links && links.sources && links.sources.length > 0) {
           setStreamingInfo(links);
-          // Prioritize "default" or "auto" quality, then the first available.
           const defaultQualitySource = links.sources.find(s => 
             s.quality?.toLowerCase() === 'default' || 
             s.quality?.toLowerCase() === 'auto' ||
-            s.quality?.toLowerCase().includes('auto') // More flexible check for "auto"
+            s.quality?.toLowerCase().includes('auto') 
           );
           const firstSource = links.sources[0];
           const qualityToSet = defaultQualitySource?.quality || firstSource?.quality;
@@ -110,10 +109,10 @@ function WatchPageContent({}: WatchPageContentProps) {
         console.log("[WatchPageContent] fetchData finished. isLoading set to false.");
       }
     }
-    if (episodeIdFromQuery) { // Only fetch if episodeId is present
+    if (episodeIdFromQuery) { 
         fetchData();
     } else {
-        setIsLoading(false); // Not loading if no episodeId
+        setIsLoading(false); 
     }
   }, [episodeIdFromQuery, animeId, selectedServer]);
 
@@ -123,12 +122,10 @@ function WatchPageContent({}: WatchPageContentProps) {
       console.log("[WatchPageContent] currentSource derived: undefined (no streamingInfo or sources)");
       return undefined;
     }
-    // If selectedQuality is set, find it. Otherwise, default to the first source.
     const source = selectedQuality 
                  ? streamingInfo.sources.find(s => s.quality === selectedQuality) 
                  : streamingInfo.sources[0];
     
-    // If selectedQuality was specific but not found, fallback to the first source
     const finalSource = source || streamingInfo.sources[0];
 
     console.log("[WatchPageContent] currentSource derived. Selected quality:", selectedQuality, "Found source:", JSON.stringify(finalSource, null, 2));
@@ -142,35 +139,27 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
-    // Apply CORS proxy if it's an http/https URL and not already proxied or from our own API.
-    // animefreestream.vercel.app is the API, not necessarily the video host.
-    // URLs from places like vault-10.padorupado.ru should be proxied if they don't have CORS.
-    if (url.startsWith('http') && !url.includes('consumet.stream/')) {
-        // Avoid proxying if it's a data URI or blob URL, though unlikely from API
-        if (!url.startsWith('data:') && !url.startsWith('blob:')) {
-            const fullUrl = new URL(url); 
-            // Check if the original host is our API host. If so, maybe don't proxy.
-            // However, if the API returns an external video URL, it *should* be proxied.
-            // For now, let's assume any external HTTP/HTTPS URL not already proxied might need it.
-            url = `${CORS_PROXY_URL}${fullUrl.protocol}//${fullUrl.host}${fullUrl.pathname}${fullUrl.search}${fullUrl.hash}`;
-            console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
-        } else {
-             console.log("[WatchPageContent] Using original URL (data/blob) for player manifest:", url);
-        }
-    } else {
-        console.log("[WatchPageContent] Using original URL for player manifest (already proxied or not HTTP):", url);
-    }
+    // Removed CORS_PROXY_URL as it was causing ERR_NAME_NOT_RESOLVED
+    // The manifest will be fetched directly from its source.
+    // xhrSetup in HLS provider will handle headers for segments.
+    console.log("[WatchPageContent] Using direct URL for player manifest (no proxy):", url);
     return url;
   }, [currentSource]);
 
 
   useEffect(() => {
     console.log("[WatchPageContent] HLS Effect Triggered. hlsProviderInstance:", hlsProviderInstance ? "Exists" : "null", "streamingInfo.headers:", streamingInfo?.headers ? JSON.stringify(streamingInfo.headers) : "null", "currentSource.isM3U8:", currentSource?.isM3U8);
-    if (hlsProviderInstance && streamingInfo?.headers && currentSource?.isM3U8) {
+    
+    if (!hlsProviderInstance) {
+        console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers.');
+        return;
+    }
+
+    if (streamingInfo?.headers && currentSource?.isM3U8) {
       const apiHeaders = { ...streamingInfo.headers };
       
       Object.keys(apiHeaders).forEach(key => {
-        if (apiHeaders[key] == null) { // Catch null or undefined
+        if (apiHeaders[key] == null) { 
           delete apiHeaders[key];
         }
       });
@@ -178,7 +167,6 @@ function WatchPageContent({}: WatchPageContentProps) {
       if (Object.keys(apiHeaders).length > 0) {
         console.log('[WatchPageContent] Attempting to configure HLS provider with custom headers:', JSON.stringify(apiHeaders));
         
-        // Ensure config object exists before assigning to its properties
         if (!hlsProviderInstance.config) {
           hlsProviderInstance.config = {};
         }
@@ -188,30 +176,30 @@ function WatchPageContent({}: WatchPageContentProps) {
           for (const headerKey in apiHeaders) {
             if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
                xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
-               console.log(`[WatchPageContent] HLS xhrSetup: Set header '${headerKey}': '${apiHeaders[headerKey]}'`);
+               console.log(`[WatchPageContent] HLS xhrSetup: Set header '${headerKey}': '${apiHeaders[headerKey]}' for ${requestUrl}`);
             }
           }
         };
         console.log('[WatchPageContent] HLS provider xhrSetup configured.');
       } else {
         console.log('[WatchPageContent] No valid custom headers found in streamingInfo.headers to apply.');
-        // If there were previous headers, we might want to clear xhrSetup
         if (hlsProviderInstance.config?.xhrSetup) {
-            console.log('[WatchPageContent] Clearing previous HLS xhrSetup.');
+            console.log('[WatchPageContent] Clearing previous HLS xhrSetup due to no valid headers.');
             delete hlsProviderInstance.config.xhrSetup;
         }
       }
-    } else if (hlsProviderInstance && hlsProviderInstance.config?.xhrSetup) {
-        // If conditions are no longer met (e.g., not M3U8, no headers), clear existing xhrSetup
+    } else {
+        // Conditions for custom headers not met (e.g., not M3U8, no headers from API, or hlsProviderInstance became null)
         console.log('[WatchPageContent] Conditions for HLS custom headers not met. Clearing previous HLS xhrSetup if any.');
-        delete hlsProviderInstance.config.xhrSetup;
+        if (hlsProviderInstance.config?.xhrSetup) {
+            delete hlsProviderInstance.config.xhrSetup;
+        }
     }
-  }, [hlsProviderInstance, streamingInfo, currentSource]); // Dependencies: hlsProviderInstance, streamingInfo (for headers), currentSource (for isM3U8)
+  }, [hlsProviderInstance, streamingInfo, currentSource]); 
 
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
     setSelectedServer(newServer);
-    // Data refetch will be triggered by useEffect due to selectedServer change
   };
 
   const navigateEpisode = (direction: 'next' | 'prev') => {
@@ -232,7 +220,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasPrevEpisode = currentEpNumber > 1 && animeDetails?.episodes?.some(ep => ep.number === currentEpNumber - 1);
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
-  if (!episodeIdFromQuery && !isLoading) { // If there's no episode ID in query and not loading something else
+  if (!episodeIdFromQuery && !isLoading) { 
      return (
         <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
             <Alert variant="destructive" className="my-6 max-w-md">
@@ -250,7 +238,6 @@ function WatchPageContent({}: WatchPageContentProps) {
      );
   }
   
-  // Initial loading state or when actively fetching and no data yet
   if (isLoading && (!streamingInfo || !playerSrcUrl)) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
@@ -295,7 +282,7 @@ function WatchPageContent({}: WatchPageContentProps) {
             </SelectContent>
           </Select>
         </div>
-        {streamingInfo && streamingInfo.sources.length > 0 && ( // Show quality selector only if sources exist
+        {streamingInfo && streamingInfo.sources.length > 0 && ( 
            <div className="flex items-center gap-2">
            <span className="text-sm font-medium">Quality:</span>
             <Select 
@@ -303,7 +290,7 @@ function WatchPageContent({}: WatchPageContentProps) {
                 onValueChange={setSelectedQuality}
                 disabled={isLoading || !streamingInfo || streamingInfo.sources.length === 0}
             >
-                <SelectTrigger className="w-[180px] h-9"> {/* Increased width for longer quality strings */}
+                <SelectTrigger className="w-[180px] h-9"> 
                     <SelectValue placeholder="Quality"/>
                 </SelectTrigger>
                 <SelectContent>
@@ -329,11 +316,11 @@ function WatchPageContent({}: WatchPageContentProps) {
 
       {!error && playerSrcUrl && currentSource && (
         <MediaPlayer
-          key={playerSrcUrl} // Re-mounts player when src changes, crucial for some updates
+          key={playerSrcUrl} 
           title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
           src={{ src: playerSrcUrl, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
-          crossOrigin // Important for fetching from different origins
+          crossOrigin 
           playsInline
           onProviderChange={(event) => {
             if (event && event.detail) {
@@ -342,11 +329,11 @@ function WatchPageContent({}: WatchPageContentProps) {
                 console.log("[WatchPageContent] HLS provider instance obtained from onProviderChange:", provider);
                 setHlsProviderInstance(provider as HlsProvider);
               } else {
-                console.log("[WatchPageContent] Non-HLS provider or null from onProviderChange:", provider);
-                setHlsProviderInstance(null); // Clear if not HLS or provider is removed
+                console.log("[WatchPageContent] Non-HLS provider or null from onProviderChange:", provider, "Clearing HLS instance.");
+                setHlsProviderInstance(null); 
               }
             } else {
-              console.warn("[WatchPageContent] onProviderChange event or event.detail is null/undefined.");
+              console.warn("[WatchPageContent] onProviderChange event or event.detail is null/undefined. Clearing HLS instance.");
               setHlsProviderInstance(null);
             }
           }}
@@ -356,16 +343,12 @@ function WatchPageContent({}: WatchPageContentProps) {
         </MediaPlayer>
       )}
       
-      {!error && !playerSrcUrl && !isLoading && ( // No error, not loading, but no player URL (e.g. no sources)
+      {!error && !playerSrcUrl && !isLoading && ( 
          <div className="my-6 p-6 bg-muted rounded-md text-center aspect-video flex items-center justify-center">
             <p className="text-muted-foreground">Video source not available for the selected server/quality. Please try a different option or check back later.</p>
          </div>
       )}
-      {/* This covers the case where isLoading is true, but playerSrcUrl *is* set (e.g. changing quality while playing)
-          This might be redundant with the main isLoading block if playerSrcUrl is cleared during loading.
-          If the player is already visible and we are just changing quality, it might show its own spinner.
-      */}
-       {isLoading && playerSrcUrl && ( // Loading new quality/source, but previous source was valid
+       {isLoading && playerSrcUrl && ( 
          <div className="my-6 p-6 bg-black rounded-md text-center flex flex-col items-center justify-center aspect-video">
             <Loader2 className="w-12 h-12 text-primary animate-spin mb-3" />
             <p className="text-white/70">Fetching new video source...</p>
@@ -393,7 +376,6 @@ function WatchPageContent({}: WatchPageContentProps) {
 
 export default function WatchPage() {
   return (
-    // Suspense boundary for useSearchParams used in WatchPageContent
     <Suspense fallback={
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
         <Loader2 className="w-16 h-16 text-primary animate-spin mb-4" />
