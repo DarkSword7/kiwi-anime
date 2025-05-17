@@ -64,7 +64,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined);
-      // setHlsProvider(null); // Reset HLS provider instance on new fetch if it's managed by onProviderChange
+      setHlsProvider(null);
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -174,17 +174,18 @@ function WatchPageContent({}: WatchPageContentProps) {
 
       if (Object.keys(apiHeaders).length > 0) {
         console.log('[WatchPageContent] Configuring HLS provider with custom headers:', JSON.stringify(apiHeaders));
-        hlsProvider.config = {
-          ...hlsProvider.config, 
-          xhrSetup: (xhr: XMLHttpRequest, requestUrl: string) => {
+        // Ensure hlsProvider.config exists
+        if (!hlsProvider.config) {
+          hlsProvider.config = {};
+        }
+        hlsProvider.config.xhrSetup = (xhr: XMLHttpRequest, requestUrl: string) => {
             console.log(`[WatchPageContent] HLS xhrSetup for ${requestUrl}. Applying headers:`, JSON.stringify(apiHeaders));
             for (const headerKey in apiHeaders) {
               if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
                  xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
               }
             }
-          }
-        };
+          };
       } else {
         console.log('[WatchPageContent] No valid API headers to apply to HLS config.');
         if (hlsProvider.config?.xhrSetup) {
@@ -244,18 +245,9 @@ function WatchPageContent({}: WatchPageContentProps) {
     return 'und'; // Undetermined
   };
 
-  const getProxiedSubtitleUrl = (originalUrl: string): string => {
-    if (originalUrl.startsWith('http') && !originalUrl.includes(CIPHERTV_CORS_PROXY_URL)) {
-        try {
-            const proxied = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(new URL(originalUrl).toString())}`;
-            console.log("[WatchPageContent] Using proxied URL for subtitle:", proxied);
-            return proxied;
-        } catch(e) {
-             console.error("[WatchPageContent] Invalid subtitle URL for proxying:", originalUrl, e);
-            return originalUrl;
-        }
-    }
-    console.log("[WatchPageContent] Using direct URL for subtitle (not proxying or already proxied):", originalUrl);
+  const getDirectSubtitleUrl = (originalUrl: string): string => {
+    // No proxying, just return the original URL
+    console.log("[WatchPageContent] Using direct URL for subtitle:", originalUrl);
     return originalUrl;
   };
   
@@ -400,8 +392,8 @@ function WatchPageContent({}: WatchPageContentProps) {
           <MediaProvider />
           {streamingInfo?.subtitles?.map((sub) => {
             const trackSrcLang = getLangCode(sub.lang);
-            const subtitleUrl = getProxiedSubtitleUrl(sub.url); 
-            console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang}, originalUrl=${sub.url}, proxiedUrl=${subtitleUrl}`);
+            const subtitleUrl = getDirectSubtitleUrl(sub.url); // Using direct URL
+            console.log(`[WatchPageContent] Rendering track: lang=${sub.lang}, srcLang=${trackSrcLang}, default=${trackSrcLang === defaultTrackSrcLang}, originalUrl=${sub.url}, directUrl=${subtitleUrl}`);
             return (
               <track
                 key={sub.url} 
