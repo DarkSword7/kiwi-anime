@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const CIPHERTV_CORS_PROXY_URL = 'https://proxys.ciphertv.dev/proxy?url=';
+// const CIPHERTV_CORS_PROXY_URL = 'https://proxys.ciphertv.dev/proxy?url='; // Keep for video if needed
 
 interface WatchPageContentProps {
   // No episodeId prop needed here, will be fetched from searchParams
@@ -63,7 +63,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined);
-      setHlsProvider(null); 
+      // setHlsProvider(null); // Reset hlsProvider on new data fetch
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -145,24 +145,20 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
-    if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev') && !url.includes('animefreestream.vercel.app/')) {
-        try {
-            const fullUrl = new URL(url); 
-            url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(fullUrl.toString())}`;
-            console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
-        } catch (e) {
-            console.error("[WatchPageContent] Invalid URL for proxying:", currentSource.url, e);
-             url = currentSource.url; 
-             console.log("[WatchPageContent] Falling back to direct URL for player manifest due to proxy error:", url);
-        }
+    // Only proxy non-local and non-vercel app URLs for video stream if needed
+    if (url.startsWith('http') && !url.includes('animefreestream.vercel.app/') && !url.includes('localhost') ) {
+      // Example proxy, replace with your actual one if needed for VIDEO streams
+      // url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(fullUrl.toString())}`;
+      // console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", url);
+      console.log("[WatchPageContent] Using direct URL for player manifest (no video proxy for now):", url);
     } else {
-        console.log("[WatchPageContent] Using direct URL for player manifest (no proxy or already proxied):", url);
+        console.log("[WatchPageContent] Using direct URL for player manifest (local or already fine):", url);
     }
     return url;
   }, [currentSource]);
 
   useEffect(() => {
-    console.log("[WatchPageContent] HLS Header Effect Triggered. hlsProvider:", !!hlsProvider, "streamingInfo.headers:", !!streamingInfo?.headers, "currentSource.isM3U8:", currentSource?.isM3U8);
+    console.log("[WatchPageContent] HLS Header Effect Triggered. hlsProvider:", !!hlsProvider, "streamingInfo.headers:", JSON.stringify(streamingInfo?.headers), "currentSource.isM3U8:", currentSource?.isM3U8);
     if (hlsProvider && streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0 && currentSource?.isM3U8) {
       const safeHeadersToSet: Record<string, string> = {};
       for (const key in streamingInfo.headers) {
@@ -170,11 +166,10 @@ function WatchPageContent({}: WatchPageContentProps) {
           const headerValue = streamingInfo.headers[key];
           if (headerValue) { 
              const lowerKey = key.toLowerCase();
-             // Browsers block setting 'Referer' and 'User-Agent' directly on XHR from client-side JS
-             if (lowerKey !== 'referer' && lowerKey !== 'user-agent') {
+             if (lowerKey !== 'referer' && lowerKey !== 'user-agent') { // Browsers block these
                 safeHeadersToSet[key] = headerValue as string;
              } else {
-                console.warn(`[WatchPageContent] Skipping setting unsafe header '${key}' in HLS xhrSetup as browsers block this.`);
+                console.warn(`[WatchPageContent] Skipping setting unsafe header '${key}' in HLS xhrSetup.`);
              }
           }
         }
@@ -215,7 +210,7 @@ function WatchPageContent({}: WatchPageContentProps) {
 
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
-    setHlsProvider(null); 
+    setHlsProvider(null); // Reset HLS provider on server change
     setSelectedServer(newServer);
   };
 
@@ -230,7 +225,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     if (targetEpisode) {
-      setHlsProvider(null); 
+      setHlsProvider(null); // Reset HLS provider on episode change
       router.push(`/watch?ep=${encodeURIComponent(targetEpisode.id)}&animeId=${animeId}&epNum=${targetEpisode.number}`);
     }
   };
@@ -238,8 +233,8 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasPrevEpisode = currentEpNumber > 1 && animeDetails?.episodes?.some(ep => ep.number === currentEpNumber - 1);
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
-const getLangCode = (langLabel: string): string => {
-    if (!langLabel) return 'und';
+  const getLangCode = (langLabel: string): string => {
+    if (!langLabel) return 'und'; // undetermined
     let lowerLangLabel = langLabel.toLowerCase().trim();
 
     // Explicitly mark thumbnails as undetermined and skip rendering them as subtitles
@@ -247,20 +242,31 @@ const getLangCode = (langLabel: string): string => {
         console.log(`[WatchPageContent] getLangCode: langLabel '${langLabel}' identified as 'thumbnails', returning 'und'.`);
         return 'und'; 
     }
-
-    // More robust parsing for labels like "Language - CR_Language(Region)" or "Language (Region)"
-    const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/); // e.g., (brazil), (latin_america), (la)
+    
+    // Handle labels like "Language - CR_Language(Region)" or "Language (Region)"
+    // Example: "Portuguese - Português (Brasil)" -> "pt-BR"
+    // Example: "Spanish - Español (LA)" -> "es-LA"
+    // Example: "Arabic - CR_Arabic" -> "ar"
+    
+    let mainLangPart = lowerLangLabel;
     let regionCode = '';
+
+    const regionMatch = lowerLangLabel.match(/\(([^)]+)\)/); // e.g., (brazil), (latin_america), (la)
     if (regionMatch) {
         const region = regionMatch[1].toLowerCase();
-        lowerLangLabel = lowerLangLabel.replace(regionMatch[0], '').trim(); // Remove region part
+        mainLangPart = mainLangPart.replace(regionMatch[0], '').trim(); // Remove region part
         if (region === 'brazil' || region === 'br') regionCode = 'BR';
         else if (region === 'latin_america' || region === 'la') regionCode = 'LA';
+        // Add more region codes as needed
     }
-    
-    const mainLangPartMatch = lowerLangLabel.match(/^([a-z\s]+)/);
-    const mainLangPart = mainLangPartMatch ? mainLangPartMatch[0].trim() : lowerLangLabel;
 
+    // Further clean up mainLangPart, e.g., "portuguese - português" -> "português"
+    const crSplit = mainLangPart.split('cr_');
+    if (crSplit.length > 1) mainLangPart = crSplit[1].trim();
+    
+    const langDashSplit = mainLangPart.split(' - ');
+    if (langDashSplit.length > 1) mainLangPart = langDashSplit[1].trim(); // Take the part after " - "
+    else mainLangPart = langDashSplit[0].trim(); // Or the original if no " - "
 
     const langNameMap: { [key: string]: string } = {
       "english": "en", "ingles": "en", "inglês": "en",
@@ -286,33 +292,22 @@ const getLangCode = (langLabel: string): string => {
     if (code === 'pt' && regionCode === 'BR') code = 'pt-BR';
     else if (code === 'es' && regionCode === 'LA') code = 'es-LA';
     else if (code === 'und' && (mainLangPart.length === 2 || mainLangPart.length === 3) && /^[a-z]{2,3}$/.test(mainLangPart)) {
+      // If mainLangPart is already a 2 or 3 letter code
       code = mainLangPart;
     }
     
-    if (code === 'und') {
+    if (code === 'und' && langLabel !== 'thumbnails') { // Avoid warning for known 'thumbnails' case
         console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
     }
     return code;
   };
 
-
-  const getProxiedSubtitleUrl = (originalUrl: string): string => {
-    // Only proxy external HTTP/HTTPS URLs. Do not proxy data URIs or relative paths.
-    if (originalUrl && originalUrl.startsWith('http') && !originalUrl.includes('proxys.ciphertv.dev') && !originalUrl.includes('animefreestream.vercel.app/')) {
-      try {
-        const proxied = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(originalUrl)}`;
-        console.log("[WatchPageContent] Using proxied URL for subtitle:", proxied, "Original:", originalUrl);
-        return proxied;
-      } catch (e) {
-        console.error("[WatchPageContent] Error proxying subtitle URL:", originalUrl, e);
-        return originalUrl; 
-      }
-    }
-    console.log("[WatchPageContent] Using direct URL for subtitle (not proxying or already proxied/local):", originalUrl);
+  const getDirectSubtitleUrl = (originalUrl: string): string => {
+    // No proxy for subtitles, return original URL
+    console.log("[WatchPageContent] Using direct URL for subtitle (no proxy):", originalUrl);
     return originalUrl;
   };
   
-  // Filter out "thumbnails" tracks from being rendered as actual subtitles
   const actualSubtitles = useMemo(() => {
     return streamingInfo?.subtitles?.filter(sub => sub.lang && !sub.lang.toLowerCase().includes('thumbnails')) || [];
   }, [streamingInfo?.subtitles]);
@@ -321,15 +316,20 @@ const getLangCode = (langLabel: string): string => {
     if (!actualSubtitles || actualSubtitles.length === 0) return null;
     
     const apiDefault = actualSubtitles.find(s => s.default === true);
-    if (apiDefault) return getLangCode(apiDefault.lang);
+    if (apiDefault) {
+        const langCode = getLangCode(apiDefault.lang);
+        if (langCode !== 'und') return langCode;
+    }
 
     const firstEnglish = actualSubtitles.find(s => getLangCode(s.lang) === 'en');
     if (firstEnglish) return getLangCode(firstEnglish.lang);
     
     if (actualSubtitles[0]) {
       const firstLangCode = getLangCode(actualSubtitles[0].lang);
-      console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available track's language:", actualSubtitles[0].lang, "Code:", firstLangCode);
-      return firstLangCode !== 'und' ? firstLangCode : null; // Only set if lang code is determined
+      if (firstLangCode !== 'und') {
+          console.log("[WatchPageContent] No default or English API-subtitle track found, defaulting to first available track's language:", actualSubtitles[0].lang, "Code:", firstLangCode);
+          return firstLangCode;
+      }
     }
     return null;
   }, [actualSubtitles]);
@@ -343,7 +343,6 @@ const getLangCode = (langLabel: string): string => {
             <AlertTitle>Missing Episode ID</AlertTitle>
             <AlertDescription>
                 The episode ID is missing from the URL. Cannot load video. 
-                Please navigate from an anime details page.
                 <Button asChild variant="link" className="mt-2">
                     <Link href="/">Go to Homepage</Link>
                 </Button>
@@ -440,7 +439,7 @@ const getLangCode = (langLabel: string): string => {
           title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
           src={{ src: playerSrcUrl, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
-          crossOrigin 
+          crossOrigin // Important for HLS and potentially subtitles
           playsInline
           onProviderChange={(provider: MediaProviderAdapter | null) => {
             console.log("[WatchPageContent] onProviderChange triggered. Provider type:", provider?.type);
@@ -453,31 +452,30 @@ const getLangCode = (langLabel: string): string => {
             }
           }}
           onTextTracksChange={(tracks, event) => { 
-            console.log('[Vidstack] TextTracksChange:', tracks.map(t => ({label: t.label, language: t.language, mode: t.mode, kind: t.kind, id: t.id, src: t.src, type: t.type })));
+            console.log('[Vidstack] TextTracksChange:', tracks.map(t => ({label: t.label, language: t.language, mode: t.mode, kind: t.kind, id: t.id, src: t.src, type: t.type, default: t.default })));
           }}
           onTextTrackChange={(track, event) => { 
-            console.log('[Vidstack] TextTrackChange (selected):', track ? {label: track.label, language: track.language, mode: track.mode, kind: track.kind, id: track.id, src: track.src, type: track.type } : null);
+            console.log('[Vidstack] TextTrackChange (selected):', track ? {label: track.label, language: track.language, mode: track.mode, kind: track.kind, id: track.id, src: track.src, type: track.type, default: track.default } : null);
           }}
         >
           <MediaProvider />
           {actualSubtitles.map((sub) => {
             const trackSrcLang = getLangCode(sub.lang);
-            // Skip rendering track if language code is undetermined (e.g., for 'thumbnails')
-            if (trackSrcLang === 'und') {
+            if (trackSrcLang === 'und') { // Do not render track if lang code is undetermined
                 console.log(`[WatchPageContent] Skipping rendering track for lang: '${sub.lang}' as its code is 'und'.`);
                 return null;
             }
-            const subtitleUrl = getProxiedSubtitleUrl(sub.url); 
-            console.log(`[WatchPageContent] Rendering track: lang='${sub.lang}', srcLang='${trackSrcLang}', default=${trackSrcLang === defaultTrackSrcLang}, originalUrl='${sub.url}', proxiedUrl='${subtitleUrl}'`);
+            const subtitleUrl = getDirectSubtitleUrl(sub.url); 
+            console.log(`[WatchPageContent] Rendering track: lang='${sub.lang}', srcLang='${trackSrcLang}', default=${trackSrcLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
             return (
               <track
-                key={sub.url + sub.lang} 
+                key={sub.url} // Use URL as key for simplicity, assuming URLs are unique per language
                 src={subtitleUrl}
                 kind="subtitles" 
                 label={sub.lang}
                 srcLang={trackSrcLang}
                 default={trackSrcLang === defaultTrackSrcLang}
-                crossOrigin="anonymous" 
+                crossOrigin="anonymous" // Essential for cross-origin VTT files
               />
             );
           })}
