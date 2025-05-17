@@ -2,10 +2,10 @@
 "use client";
 
 import Link from 'next/link';
-import { Kiwi, Home, Search as SearchIcon, Menu } from 'lucide-react'; // Removed Wand2
+import { Kiwi, Home, Search as SearchIcon, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"; // Added SheetHeader and SheetTitle
 import React, { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -62,7 +62,6 @@ export function Header() {
                 Search
               </Link>
             </Button>
-            {/* Removed AI Suggester Link */}
           </nav>
         </div>
 
@@ -76,6 +75,9 @@ export function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px] bg-background p-6">
+              <SheetHeader>
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle> {/* Added sr-only for visual hiding if desired, or make it visible */}
+              </SheetHeader>
               <nav className="flex flex-col space-y-4 mt-6">
                  <form onSubmit={handleSearchSubmit} className="relative w-full mb-4">
                     <Input
@@ -93,7 +95,6 @@ export function Header() {
                 <Link href="/search" className="text-lg font-medium hover:text-primary transition-colors flex items-center">
                   <SearchIcon className="mr-2 h-5 w-5" /> Search
                 </Link>
-                {/* Removed AI Suggester Link from Mobile Menu */}
               </nav>
             </SheetContent>
           </Sheet>
