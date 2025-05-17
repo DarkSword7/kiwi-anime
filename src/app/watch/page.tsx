@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
 import { MediaPlayer, MediaProvider, type MediaProviderAdapter } from '@vidstack/react';
-// Removed HlsProvider import as it's not directly used for state anymore
+import { type HLSProvider } from '@vidstack/react/providers/hls'; // Import HLSProvider for typing
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
 import type { StreamingLinks, AnimeInfo, StreamingSource, SubtitleTrack } from '@/types/anime';
@@ -40,7 +40,8 @@ function WatchPageContent({}: WatchPageContentProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedServer, setSelectedServer] = useState<string>('vidstreaming'); 
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
-  // Removed hlsProviderInstance state
+  const [hlsProvider, setHlsProvider] = useState<HLSProvider | null>(null);
+
 
   const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape", "animepahe"]; 
 
@@ -62,7 +63,8 @@ function WatchPageContent({}: WatchPageContentProps) {
       setIsLoading(true);
       setError(null);
       setStreamingInfo(null); 
-      setSelectedQuality(undefined); 
+      setSelectedQuality(undefined);
+      setHlsProvider(null); // Reset HLS provider on new fetch
 
       try {
         const links = await getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
@@ -152,38 +154,49 @@ function WatchPageContent({}: WatchPageContentProps) {
     return url;
   }, [currentSource]);
 
-  // Prepare hlsConfig for MediaPlayer
-  const hlsConfig = useMemo(() => {
-    if (streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0 && currentSource?.isM3U8) {
+  // Effect to configure HLS.js instance when provider and headers are available
+  useEffect(() => {
+    if (hlsProvider && hlsProvider.hls && streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0 && currentSource?.isM3U8) {
+      const hlsInstance = hlsProvider.hls; // This is the HLS.js instance
       const apiHeaders = { ...streamingInfo.headers };
-      // Remove null/undefined headers
-      Object.keys(apiHeaders).forEach((key) => {
+      
+      Object.keys(apiHeaders).forEach((key) => { // Filter out null/empty headers
         if (apiHeaders[key] == null || apiHeaders[key] === '') delete apiHeaders[key];
       });
-  
+
       if (Object.keys(apiHeaders).length > 0) {
-        console.log('[WatchPageContent] Preparing hlsConfig with headers:', JSON.stringify(apiHeaders));
-        return {
-          // Consume API headers and apply them to HLS.js XHR requests.
-          xhrSetup: (xhr: XMLHttpRequest, requestUrl: string) => {
-            console.log(`[HLS xhrSetup via hlsConfig prop] Applying to ${requestUrl}:`, JSON.stringify(apiHeaders));
-            for (const headerKey in apiHeaders) {
-              if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
-                xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
-              }
+        console.log('[WatchPageContent] Configuring HLS instance (hlsProvider.hls) directly with custom headers:', JSON.stringify(apiHeaders));
+        
+        // Ensure config object exists
+        hlsInstance.config = hlsInstance.config || {};
+        
+        hlsInstance.config.xhrSetup = (xhr: XMLHttpRequest, requestUrl: string) => {
+          console.log(`[HLS xhrSetup via direct config] Applying to ${requestUrl}:`, JSON.stringify(apiHeaders));
+          for (const headerKey in apiHeaders) {
+            if (Object.prototype.hasOwnProperty.call(apiHeaders, headerKey) && apiHeaders[headerKey]) {
+              xhr.setRequestHeader(headerKey, apiHeaders[headerKey] as string);
             }
-          },
+          }
         };
+        // If HLS.js instance was already running, it might need a nudge to re-evaluate config for new segments
+        // For example, if a source was already loaded. Vidstack might handle this, or one might need to hlsInstance.loadSource(currentSource.url) if issues persist
+        // This is complex; often, re-keying the MediaPlayer by changing its `src` prop is enough for Vidstack to create a new HLS instance.
+      } else {
+        console.log('[WatchPageContent] No API headers to apply to HLS instance.');
+         if(hlsInstance.config) delete hlsInstance.config.xhrSetup;
+      }
+    } else {
+      console.log('[WatchPageContent] HLS header effect: Conditions not met (hlsProvider, headers, or M3U8 source missing). Provider:', hlsProvider ? 'Exists' : 'null');
+      if(hlsProvider && hlsProvider.hls && hlsProvider.hls.config) {
+        delete hlsProvider.hls.config.xhrSetup; // Clear previous config if conditions no longer met
       }
     }
-    console.log('[WatchPageContent] No custom HLS headers to apply or not an HLS source.');
-    return undefined; // Return undefined if no specific HLS config is needed
-  }, [streamingInfo?.headers, currentSource?.isM3U8]);
+  }, [hlsProvider, streamingInfo, currentSource]); // Re-run if provider, headers, or source type changes
 
 
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
-    // No need to manage hlsProviderInstance state anymore
+    setHlsProvider(null); // Reset HLS provider on server change
     setSelectedServer(newServer);
   };
 
@@ -198,7 +211,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     if (targetEpisode) {
-      // No need to manage hlsProviderInstance state anymore
+      setHlsProvider(null); // Reset HLS provider on episode change
       router.push(`/watch?ep=${encodeURIComponent(targetEpisode.id)}&animeId=${animeId}&epNum=${targetEpisode.number}`);
     }
   };
@@ -211,10 +224,12 @@ function WatchPageContent({}: WatchPageContentProps) {
     const langMap: { [key: string]: string } = {
       "english": "en", "spanish": "es", "japanese": "ja", "german": "de", "french": "fr",
       "portuguese (brazilian)": "pt-BR", "arabic": "ar", "russian": "ru", "italian": "it",
-      "default": "en", // Common fallback if API uses "Default"
+      "default": "en", 
     };
     const lowerLangLabel = langLabel.toLowerCase().trim();
-    return langMap[lowerLangLabel] || lowerLangLabel.substring(0, 2) || 'und';
+    if (langMap[lowerLangLabel]) return langMap[lowerLangLabel];
+    if (lowerLangLabel.length === 2 || (lowerLangLabel.length === 5 && lowerLangLabel[2] === '-')) return lowerLangLabel; // Basic ISO 639-1 or 639-1 with region
+    return 'und'; // Undetermined
   };
 
   const getProxiedSubtitleUrl = (originalUrl: string): string => {
@@ -341,8 +356,22 @@ function WatchPageContent({}: WatchPageContentProps) {
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
           crossOrigin 
           playsInline
-          hlsConfig={hlsConfig} // Apply HLS config directly
-          // Removed onProviderChange as hlsProviderInstance is no longer managed here
+          onProviderChange={(adapter) => {
+            if (adapter && adapter.type === 'hls') { // Check if adapter is not null
+              console.log('[WatchPageContent] HLS provider adapter acquired:', adapter);
+              // Ensure it's actually an HLSProvider, not just MediaProviderAdapter
+              // This check might need to be more specific if types are very strict
+              if ('hls' in adapter) { 
+                setHlsProvider(adapter as HLSProvider);
+              } else {
+                console.warn('[WatchPageContent] Adapter is HLS type but "hls" instance not found.');
+                setHlsProvider(null);
+              }
+            } else {
+              console.log('[WatchPageContent] Provider is not HLS or adapter is null/undefined. Clearing HLS provider.');
+              setHlsProvider(null);
+            }
+          }}
         >
           <MediaProvider />
           {streamingInfo?.subtitles?.map((sub) => {
@@ -406,5 +435,4 @@ export default function WatchPage() {
     </Suspense>
   );
 }
-
 
