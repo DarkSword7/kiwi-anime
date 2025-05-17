@@ -4,8 +4,8 @@
 import axios from 'axios';
 import type { AnimeSearchResult, AnimeInfo, Episode, StreamingLinks } from '@/types/anime';
 
-const API_BASE_URL = 'https://animefreestream.vercel.app'; // User's self-hosted Consumet API
-const ZORO_PROVIDER_PATH = '/anime/zoro'; // Zoro provider path
+const API_BASE_URL = 'https://animefreestream.vercel.app';
+const ANIMEPAHE_PROVIDER_PATH = '/anime/animepahe'; // Changed from Zoro to AnimePahe
 
 // Centralized error logging for API calls
 const logApiError = (error: any, context: string, requestUrl: string, queryParams?: object) => {
@@ -20,11 +20,9 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
       if (responseData.trim().startsWith('<!DOCTYPE html>') || responseData.trim().startsWith('<html')) {
         responseData = '[HTML Response - Truncated]';
       } else {
-        // Truncate long non-HTML strings as well
         responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated]' : '');
       }
     } else if (typeof responseData === 'object' && responseData !== null) {
-      // Attempt to stringify, but catch if it's too complex or circular
       try {
         responseData = JSON.stringify(responseData, null, 2);
       } catch (e) {
@@ -44,8 +42,8 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
 };
 
 export async function searchAnime(query: string, page: number = 1): Promise<{ currentPage: number, hasNextPage: boolean, results: AnimeSearchResult[] }> {
-  const context = 'searchAnime (Zoro)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/${encodeURIComponent(query)}`;
+  const context = 'searchAnime (AnimePahe)';
+  const requestUrl = `${API_BASE_URL}${ANIMEPAHE_PROVIDER_PATH}/${encodeURIComponent(query)}`;
   
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { page });
 
@@ -71,9 +69,8 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
 }
 
 export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
-  const context = 'getAnimeInfo (Zoro)';
-  // Zoro API uses /info?id={id}
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/info`;
+  const context = 'getAnimeInfo (AnimePahe)';
+  const requestUrl = `${API_BASE_URL}${ANIMEPAHE_PROVIDER_PATH}/info`;
 
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { id });
 
@@ -95,7 +92,6 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
     } else if (data.title && typeof data.title.native === 'string') {
         title = data.title.native;
     }
-
 
     if (typeof data.id !== 'string' && typeof data.id !== 'number') {
         console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Missing or invalid id. Data:`, data);
@@ -121,14 +117,15 @@ export async function getAnimeInfo(id: string): Promise<AnimeInfo | null> {
 }
 
 export async function getEpisodeStreamingLinks(episodeId: string, server: string = 'vidstreaming'): Promise<StreamingLinks | null> {
-  const context = 'getEpisodeStreamingLinks (Zoro)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/watch/${episodeId}`;
+  const context = 'getEpisodeStreamingLinks (AnimePahe)';
+  // Changed to use episodeId as a query parameter for AnimePahe provider
+  const requestUrl = `${API_BASE_URL}${ANIMEPAHE_PROVIDER_PATH}/watch`;
 
-  console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { server });
+  console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { episodeId, server });
   
   try {
     const { data } = await axios.get(requestUrl, {
-      params: { server }, 
+      params: { episodeId, server }, // episodeId is now a query param
     });
 
     if (typeof data === 'object' && data !== null && Array.isArray(data.sources)) {
@@ -154,43 +151,40 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
 }
 
 export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = `getTrendingAnimeList (Zoro /top-airing)`;
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/top-airing`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
-  
+  const context = `getTrendingAnimeList (AnimePahe via search)`;
+  console.log(`[anime-service] ${context}: Fetching page ${page} by searching for "top airing".`);
   try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-    if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[]; // Limit to 8 for homepage
-    } else if (Array.isArray(data)) { // Fallback if API returns array directly
-      return data.slice(0, 8) as AnimeSearchResult[];
+    // Using searchAnime (which now uses AnimePahe) with a generic term
+    const searchData = await searchAnime("top airing", page);
+    if (searchData && Array.isArray(searchData.results)) {
+      return (searchData.results || []).slice(0, 8) as AnimeSearchResult[];
     } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      console.warn(`[anime-service] ${context}: Unexpected data structure from search. Data:`, searchData);
       return [];
     }
   } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
+    // searchAnime already logs errors, so just log context here
+    console.error(`[anime-service] Error in ${context}:`, error.message);
     return [];
   }
 }
 
 export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = `getPopularAnimeList (Zoro /most-popular)`;
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/most-popular`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
-
+  const context = `getPopularAnimeList (AnimePahe via search)`;
+  console.log(`[anime-service] ${context}: Fetching page ${page} by searching for "popular".`);
   try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-     if (data && Array.isArray(data.results)) {
-      return (data.results || []).slice(0, 8) as AnimeSearchResult[]; // Limit to 8 for homepage
-    } else if (Array.isArray(data)) { // Fallback if API returns array directly
-      return data.slice(0, 8) as AnimeSearchResult[];
+    // Using searchAnime (which now uses AnimePahe) with a generic term
+    const searchData = await searchAnime("popular", page);
+     if (searchData && Array.isArray(searchData.results)) {
+      return (searchData.results || []).slice(0, 8) as AnimeSearchResult[];
     } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      console.warn(`[anime-service] ${context}: Unexpected data structure from search. Data:`, searchData);
       return [];
     }
   } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
+    // searchAnime already logs errors, so just log context here
+    console.error(`[anime-service] Error in ${context}:`, error.message);
     return [];
   }
 }
+
