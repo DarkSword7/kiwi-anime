@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// const CORS_PROXY_URL = 'https://cors.consumet.stream/'; // Known to be down (ERR_NAME_NOT_RESOLVED)
+const CIPHERTV_CORS_PROXY_URL = 'https://proxys.ciphertv.dev/proxy?url=';
 
 interface WatchPageContentProps {
   // No episodeId prop needed here, will be fetched from searchParams
@@ -139,9 +139,13 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     let url = currentSource.url;
-    // Attempting to load manifest directly as CORS_PROXY_URL (cors.consumet.stream) is not resolving.
-    // Playback will fail if the manifest host (e.g., vault-*.kwikie.ru) has restrictive CORS.
-    console.log("[WatchPageContent] Using direct URL for player manifest (no proxy):", url);
+    // Apply new CORS proxy if it's an http/https URL and not already proxied by ciphertv or from our own API domain
+    if (url.startsWith('http') && !url.includes('proxys.ciphertv.dev/') && !url.includes('animefreestream.vercel.app/')) {
+        url = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
+        console.log("[WatchPageContent] Using CipherTV CORS proxied URL for player manifest:", url);
+    } else {
+        console.log("[WatchPageContent] Using original or already proxied URL for player manifest:", url);
+    }
     return url;
   }, [currentSource]);
 
@@ -159,7 +163,6 @@ function WatchPageContent({}: WatchPageContentProps) {
     if (streamingInfo?.headers && currentSource?.isM3U8) {
       const apiHeaders = { ...streamingInfo.headers };
       
-      // Remove null/undefined headers
       Object.keys(apiHeaders).forEach(key => {
         if (apiHeaders[key] == null) { 
           delete apiHeaders[key];
@@ -169,7 +172,6 @@ function WatchPageContent({}: WatchPageContentProps) {
       if (Object.keys(apiHeaders).length > 0) {
         console.log('[WatchPageContent] Configuring HLS provider WITH custom headers:', JSON.stringify(apiHeaders));
         
-        // Ensure hlsProviderInstance.config exists
         if (!hlsProviderInstance.config) {
           hlsProviderInstance.config = {};
         }
@@ -187,21 +189,21 @@ function WatchPageContent({}: WatchPageContentProps) {
       } else {
         console.log('[WatchPageContent] No valid custom headers found in streamingInfo.headers to apply. Clearing previous HLS xhrSetup if any.');
         if (hlsProviderInstance.config?.xhrSetup) {
-            delete hlsProviderInstance.config.xhrSetup; // Clear previous config
+            delete hlsProviderInstance.config.xhrSetup; 
         }
       }
     } else {
         console.log('[WatchPageContent] Conditions for HLS custom headers not met (not M3U8, or no API headers, or no HLS provider). Clearing previous HLS xhrSetup if any.');
         if (hlsProviderInstance.config?.xhrSetup) {
-            delete hlsProviderInstance.config.xhrSetup; // Clear previous config
+            delete hlsProviderInstance.config.xhrSetup; 
         }
     }
-  }, [hlsProviderInstance, streamingInfo, currentSource]); // Dependencies for the HLS header setup
+  }, [hlsProviderInstance, streamingInfo, currentSource]); 
 
   const handleServerChange = (newServer: string) => {
     console.log("[WatchPageContent] Server changed to:", newServer);
     setSelectedServer(newServer);
-    setHlsProviderInstance(null); // Reset HLS provider instance on server change
+    setHlsProviderInstance(null); 
   };
 
   const navigateEpisode = (direction: 'next' | 'prev') => {
@@ -215,7 +217,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
 
     if (targetEpisode) {
-      setHlsProviderInstance(null); // Reset HLS provider for new episode
+      setHlsProviderInstance(null); 
       router.push(`/watch?ep=${encodeURIComponent(targetEpisode.id)}&animeId=${animeId}&epNum=${targetEpisode.number}`);
     }
   };
@@ -223,7 +225,6 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasPrevEpisode = currentEpNumber > 1 && animeDetails?.episodes?.some(ep => ep.number === currentEpNumber - 1);
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
-  // Initial loading state or if episodeId is missing
   if (!episodeIdFromQuery && !isLoading) { 
      return (
         <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
@@ -242,7 +243,6 @@ function WatchPageContent({}: WatchPageContentProps) {
      );
   }
   
-  // Loading state while fetching data, but only if we don't have a player source or streaming info yet
   if (isLoading && (!streamingInfo || !playerSrcUrl)) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
@@ -287,7 +287,6 @@ function WatchPageContent({}: WatchPageContentProps) {
             </SelectContent>
           </Select>
         </div>
-        {/* Quality Selector: Only show if multiple qualities exist */}
         {streamingInfo && streamingInfo.sources.length > 0 && ( 
            <div className="flex items-center gap-2">
            <span className="text-sm font-medium">Quality:</span>
@@ -296,7 +295,7 @@ function WatchPageContent({}: WatchPageContentProps) {
                 onValueChange={setSelectedQuality}
                 disabled={isLoading || !streamingInfo || streamingInfo.sources.length === 0}
             >
-                <SelectTrigger className="w-[180px] h-9"> {/* Increased width for longer quality strings */}
+                <SelectTrigger className="w-[180px] h-9"> 
                     <SelectValue placeholder="Quality"/>
                 </SelectTrigger>
                 <SelectContent>
@@ -309,11 +308,9 @@ function WatchPageContent({}: WatchPageContentProps) {
             </Select>
             </div>
         )}
-         {/* Loading indicator for server/quality change */}
          {isLoading && <Loader2 className="w-5 h-5 text-primary animate-spin" />}
       </div>
 
-      {/* Error display */}
       {error && ( 
         <Alert variant="destructive" className="my-6">
           <Tv className="h-5 w-5" />
@@ -322,28 +319,27 @@ function WatchPageContent({}: WatchPageContentProps) {
         </Alert>
       )}
 
-      {/* Video Player: Only render if no error, playerSrcUrl, and currentSource are available */}
       {!error && playerSrcUrl && currentSource && (
         <MediaPlayer
-          key={playerSrcUrl} // Re-initialize player if src URL changes
+          key={playerSrcUrl} 
           title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
           src={{ src: playerSrcUrl, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
           className="w-full aspect-video rounded-lg overflow-hidden shadow-2xl bg-black"
-          crossOrigin // Important for HLS and some direct sources
+          crossOrigin 
           playsInline
           onProviderChange={(event) => {
-            if (event && event.detail) { // Check if event and event.detail are not null
+            if (event && event.detail) { 
               const provider = event.detail;
               if (provider?.type === 'hls') {
                 console.log("[WatchPageContent] HLS provider instance obtained from onProviderChange:", provider);
                 setHlsProviderInstance(provider as HlsProvider);
               } else {
                 console.log("[WatchPageContent] Non-HLS provider from onProviderChange:", provider, "Clearing HLS instance.");
-                setHlsProviderInstance(null); // Clear if not HLS or provider is null
+                setHlsProviderInstance(null); 
               }
             } else {
               console.warn("[WatchPageContent] onProviderChange event or event.detail is null/undefined. Clearing HLS instance.");
-              setHlsProviderInstance(null); // Clear if event or detail is missing
+              setHlsProviderInstance(null); 
             }
           }}
         >
@@ -352,14 +348,12 @@ function WatchPageContent({}: WatchPageContentProps) {
         </MediaPlayer>
       )}
       
-      {/* Message if video source is not available (but no general error) */}
       {!error && !playerSrcUrl && !isLoading && ( 
          <div className="my-6 p-6 bg-muted rounded-md text-center aspect-video flex items-center justify-center">
             <p className="text-muted-foreground">Video source not available for the selected server/quality. Please try a different option or check back later.</p>
          </div>
       )}
-       {/* Specific loading state when changing server/quality and waiting for new source */}
-       {isLoading && playerSrcUrl && ( // Show this if we are loading AND a playerSrcUrl (from previous selection) exists
+       {isLoading && playerSrcUrl && ( 
          <div className="my-6 p-6 bg-black rounded-md text-center flex flex-col items-center justify-center aspect-video">
             <Loader2 className="w-12 h-12 text-primary animate-spin mb-3" />
             <p className="text-white/70">Fetching new video source...</p>
@@ -367,7 +361,6 @@ function WatchPageContent({}: WatchPageContentProps) {
        )}
 
 
-      {/* Episode Navigation */}
       {animeDetails && (
         <div className="mt-6 flex justify-between items-center">
           <Button variant="outline" onClick={() => navigateEpisode('prev')} disabled={!hasPrevEpisode || isLoading}>
@@ -379,7 +372,6 @@ function WatchPageContent({}: WatchPageContentProps) {
         </div>
       )}
 
-      {/* Fallback message if animeId was missing so details couldn't be loaded */}
       {episodeIdFromQuery && !animeId && ( 
           <p className="mt-4 text-sm text-muted-foreground">Additional anime details could not be loaded (animeId missing).</p>
       )}
@@ -387,7 +379,6 @@ function WatchPageContent({}: WatchPageContentProps) {
   );
 }
 
-// Main Watch Page component (Server Component wrapper for Suspense)
 export default function WatchPage() {
   return (
     <Suspense fallback={
@@ -400,6 +391,3 @@ export default function WatchPage() {
     </Suspense>
   );
 }
-
-        
-        
