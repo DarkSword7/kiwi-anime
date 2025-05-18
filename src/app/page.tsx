@@ -8,34 +8,43 @@ import { Separator } from '@/components/ui/separator';
 
 export default async function HomePage() {
   const [trendingAnimeResult, popularAnimeResult, recentEpisodesResult] = await Promise.allSettled([
-    getTrendingAnimeList(1),
-    getPopularAnimeList(1),
-    getRecentEpisodesList(1)
+    getTrendingAnimeList(1), // Fetches a page of trending anime
+    getPopularAnimeList(1),  // Fetches a page of popular anime
+    getRecentEpisodesList(1) // Fetches a page of recent episodes
   ]);
 
   const trendingAnime = trendingAnimeResult.status === 'fulfilled' ? trendingAnimeResult.value : [];
   const popularAnime = popularAnimeResult.status === 'fulfilled' ? popularAnimeResult.value : [];
   const recentEpisodes = recentEpisodesResult.status === 'fulfilled' ? recentEpisodesResult.value : [];
   
+  // Data for Hero Carousel (e.g., first 8 trending items)
   const carouselItems = trendingAnime.slice(0, 8);
+
+  // Data for Sliders (e.g., first 20 items)
   const recentEpisodesForSlider = recentEpisodes.slice(0, 20);
   const popularAnimeForSlider = popularAnime.slice(0, 20);
-  const topAnimeForSidebar = popularAnime.slice(0, 10);
-
+  
+  // Data for Columnar Lists (e.g., first 5 items from respective lists)
   const newReleaseItems = recentEpisodes.slice(0, 5);
   const newAddedItems = trendingAnime.slice(0, 5); 
   const popularRightNowItems = popularAnime.slice(0, 5);
 
-  const sidebarStickyTopClass = "top-[calc(theme(spacing.16)_+_theme(spacing.8))]"; 
-  const sidebarMaxHeightClass = "max-h-[calc(100vh_-_theme(spacing.16)_-_theme(spacing.8)_-_theme(spacing.8))]";
+  // Data for Top Anime Sidebar (e.g., top 10 popular items)
+  const topAnimeForSidebar = popularAnime.slice(0, 10);
+
+  // Tailwind classes for sticky sidebar positioning
+  const sidebarStickyTopClass = "top-[calc(theme(spacing.16)_+_theme(spacing.8))]"; // Header height (h-16) + main content py-8 top
+  const sidebarMaxHeightClass = "max-h-[calc(100vh_-_theme(spacing.16)_-_theme(spacing.8)_-_theme(spacing.8))]"; // Full height minus header and main's top/bottom padding
 
   return (
     <div className="space-y-10 md:space-y-14"> {/* Outer container for spacing */}
       <HeroCarousel items={carouselItems} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,_1fr)_320px] gap-6">
+      {/* Grid container for main content and sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,_1fr)_300px] gap-6">
+        
         {/* Main content sections (sliders, columnar list) */}
-        <div className="space-y-10 md:space-y-14 order-1">
+        <div className="space-y-10 md:space-y-14 order-1 lg:order-1 overflow-hidden">
           {recentEpisodesForSlider.length > 0 && (
             <AnimeSlider title="Recently Uploaded" animeList={recentEpisodesForSlider} />
           )}
@@ -97,7 +106,7 @@ export default async function HomePage() {
 
         {/* Sidebar column */}
         <aside 
-          className={`order-2 lg:order-none lg:sticky ${sidebarStickyTopClass} ${sidebarMaxHeightClass}`}
+          className={`order-2 lg:order-2 lg:sticky ${sidebarStickyTopClass} ${sidebarMaxHeightClass} w-full lg:w-auto`}
         >
           {topAnimeForSidebar.length > 0 ? (
             <TopAnimeSidebar animeList={topAnimeForSidebar} />
