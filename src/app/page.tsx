@@ -8,9 +8,9 @@ import { Separator } from '@/components/ui/separator';
 
 export default async function HomePage() {
   const [trendingAnimeResult, popularAnimeResult, recentEpisodesResult] = await Promise.allSettled([
-    getTrendingAnimeList(1),
-    getPopularAnimeList(1),
-    getRecentEpisodesList(1)
+    getTrendingAnimeList(1), // Assuming this fetches a good number for carousel/lists
+    getPopularAnimeList(1), // Assuming this fetches a good number for popular slider & sidebar
+    getRecentEpisodesList(1) // Assuming this fetches a good number for recent slider
   ]);
 
   const trendingAnime = trendingAnimeResult.status === 'fulfilled' ? trendingAnimeResult.value : [];
@@ -33,9 +33,9 @@ export default async function HomePage() {
   const sidebarMaxHeightClass = "max-h-[calc(100vh_-_theme(spacing.16)_-_theme(spacing.8)_-_theme(spacing.8))]";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-x-8 gap-y-10"> {/* Explicit sidebar width */}
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,_1fr)_320px] gap-6"> {/* Adjusted grid and gap */}
       {/* Main content column */}
-      <div className="space-y-10 md:space-y-14 lg:col-span-1">
+      <div className="space-y-10 md:space-y-14 order-1"> {/* Ensure main content is first on small screens */}
         <HeroCarousel items={carouselItems} />
 
         {recentEpisodesForSlider.length > 0 && (
@@ -97,9 +97,9 @@ export default async function HomePage() {
         </section>
       </div>
 
-      {/* Sidebar column */}
+      {/* Sidebar column - always in DOM, but stacking and sticky behavior changes with screen size */}
       <aside 
-        className={`hidden lg:block lg:col-span-1 sticky ${sidebarStickyTopClass} ${sidebarMaxHeightClass} border-2 border-destructive`} // TEMPORARY BORDER FOR DEBUGGING
+        className={`order-2 lg:order-none lg:sticky ${sidebarStickyTopClass} ${sidebarMaxHeightClass}`}
       >
         {topAnimeForSidebar.length > 0 ? (
           <TopAnimeSidebar animeList={topAnimeForSidebar} />
