@@ -256,7 +256,7 @@ function WatchPageContent({}: WatchPageContentProps) {
       { regex: /french|français|fr(?:[^a-zA-Z]|$)/i, code: "fr" },
       { regex: /german|deutsch|de(?:[^a-zA-Z]|$)/i, code: "de" },
       { regex: /italian|italiano|it(?:[^a-zA-Z]|$)/i, code: "it" },
-      { regex: /arabic|العربية|ar(?:[^a-zA-Z]|$)/i, code: "ar" }, // Simpler Arabic regex
+      { regex: /arabic|العربية|ar(?:[^a-zA-Z]|$)/i, code: "ar" }, 
       { regex: /russian|русский|ru(?:[^a-zA-Z]|$)/i, code: "ru" },
       { regex: /japanese|日本語|ja(?:[^a-zA-Z]|$)/i, code: "ja" },
       { regex: /indonesian|bahasa indonesia|id(?:[^a-zA-Z]|$)/i, code: "id" },
@@ -270,22 +270,17 @@ function WatchPageContent({}: WatchPageContentProps) {
     
     for (const entry of langMap) {
         if (entry.regex.test(lowerLangLabel)) {
-            console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched regex ${entry.regex} to '${entry.code}'.`);
+            // console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched regex ${entry.regex} to '${entry.code}'.`);
             return entry.code;
         }
     }
     
-    // Attempt to extract a simple 2 or 3 letter code if no full match and not specific "CR_" prefix
-    if (!lowerLangLabel.startsWith('cr_')) {
-        const simpleCodeMatch = lowerLangLabel.match(/^([a-z]{2,3})(?:[^\w(]|$)/i);
-        if (simpleCodeMatch) {
-            const extractedCode = simpleCodeMatch[1].toLowerCase();
-            console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched simple code '${extractedCode}'.`);
-            return extractedCode;
-        }
+    const mainLangPart = lowerLangLabel.split(/[-_\s(]/)[0];
+     if (!mainLangPart.startsWith('cr_') && /^[a-z]{2,3}$/.test(mainLangPart)) {
+        // console.log(`[WatchPageContent] getLangCode: '${langLabel}' extracted main part '${mainLangPart}' as code.`);
+        return mainLangPart;
     }
 
-    const mainLangPart = lowerLangLabel.split(/[-_\s(]/)[0];
     console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
     return 'und';
   };
@@ -315,7 +310,7 @@ function WatchPageContent({}: WatchPageContentProps) {
     for (const sub of actualSubtitles) {
         const langCode = getLangCode(sub.lang);
         if (langCode !== 'und') {
-            console.log("[WatchPageContent] No default/English API-subtitle, defaulting to first valid:", sub.lang, "Code:", langCode);
+            // console.log("[WatchPageContent] No default/English API-subtitle, defaulting to first valid:", sub.lang, "Code:", langCode);
             return langCode;
         }
     }
@@ -439,7 +434,7 @@ function WatchPageContent({}: WatchPageContentProps) {
                     setHlsProvider(providerAdapter as HLSProvider);
                 } else {
                      console.log("[WatchPageContent] Non-HLS provider or null. Clearing HLS instance from onProviderChange.");
-                    setHlsProvider(null);
+                     if(hlsProvider) setHlsProvider(null); // Clear if it was previously set
                 }
               }}
               onTextTracksChange={(tracks, event) => { 
@@ -451,28 +446,28 @@ function WatchPageContent({}: WatchPageContentProps) {
             >
               <MediaProvider>
                  {actualSubtitles.map((sub) => {
-                  const trackLang = getLangCode(sub.lang);
-                   if (trackLang === 'und') { 
+                  const trackSrcLang = getLangCode(sub.lang);
+                   if (trackSrcLang === 'und') { 
                       console.log(`[WatchPageContent] Skipping Vidstack <Track> for lang: '${sub.lang}' (code 'und'). URL: ${sub.url}`);
                       return null;
                   }
                   const subtitleUrl = getDirectSubtitleUrl(sub.url); 
-                  console.log(`[WatchPageContent] Rendering track: lang='${sub.lang}', srcLang='${trackLang}', default=${trackLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
+                  // console.log(`[WatchPageContent] Rendering Vidstack <Track>: lang='${sub.lang}', srcLang='${trackSrcLang}', default=${trackSrcLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
                   return (
                     <Track
                       key={sub.url} 
                       src={subtitleUrl}
                       kind="subtitles" 
                       label={sub.lang} 
-                      lang={trackLang}  
-                      default={trackLang === defaultTrackSrcLang}
+                      lang={trackSrcLang}  
+                      default={trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}
                       type="vtt" 
                       crossOrigin="anonymous"
                     />
                   );
                 })}
               </MediaProvider>
-              <Captions className="vds-captions font-semibold text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl px-6 py-2 bg-black/70 rounded-lg shadow-xl [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]" /> 
+              <Captions className="vds-captions font-semibold text-lg sm:text-xl md:text-2xl [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]" /> 
               <DefaultVideoLayout icons={defaultLayoutIcons} className="text-foreground data-[focus]:ring-primary/80" />
             </MediaPlayer>
           )}
