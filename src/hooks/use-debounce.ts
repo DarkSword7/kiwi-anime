@@ -1,20 +1,29 @@
-// src/hooks/use-debounce.ts
-import { useState, useEffect } from 'react';
 
-export function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+import { useEffect, useState } from 'react';
+
+// Custom hook for debouncing
+export function useDebounce(
+  callback: () => void,
+  delay: number,
+  dependencies: React.DependencyList
+) {
+  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    const newTimeoutId = setTimeout(() => {
+      callback();
     }, delay);
+    setTimeoutId(newTimeoutId);
 
-    // Cleanup function that clears the timeout if value or delay changes
-    // before the timeout has completed.
+    // Cleanup function
     return () => {
-      clearTimeout(handler);
+      if (newTimeoutId) {
+        clearTimeout(newTimeoutId);
+      }
     };
-  }, [value, delay]); // Only re-call effect if value or delay changes
-
-  return debouncedValue;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...dependencies, delay]); // Re-run effect if dependencies or delay change
 }
