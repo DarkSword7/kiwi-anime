@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { Home, Menu, Search as SearchIcon } from 'lucide-react'; // Added SearchIcon import
+import { Home, Menu, Search as SearchIcon } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import React, { useState } from 'react';
@@ -16,8 +16,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
-        <Link href="/" className="mr-6 flex items-center space-x-2" onClick={closeMobileMenu}>
-          {/* Using a simple SVG for Kiwi icon as requested */}
+        <Link href="/" className="flex items-center space-x-2" onClick={closeMobileMenu}>
+          {/* Using a simple SVG for Kiwi icon */}
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary h-7 w-7">
             <path d="M15.34 10.66a4 4 0 1 0-8.54-3.38"/>
             <path d="M8.43 10.08c-.19.64-.23 1.4.13 2.19A4 4 0 0 0 16.71 8.7"/>
@@ -61,7 +61,7 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px] bg-background p-0 pt-6 flex flex-col">
               <SheetHeader className="px-6">
-                <SheetTitle className="sr-only">Navigation Menu</SheetTitle> {/* Added for accessibility */}
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
               </SheetHeader>
               <div className="px-6 mb-4">
                 <HeaderSearchBar onSearchSubmit={closeMobileMenu} />
