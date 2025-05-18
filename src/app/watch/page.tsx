@@ -20,9 +20,9 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, ArrowLeft, Tv, SkipBack, SkipForward, Settings2, ListVideo, Info } from 'lucide-react';
+import { Loader2, ArrowLeft, Tv, SkipBack, SkipForward, Settings2, ListVideo, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -73,8 +73,8 @@ function WatchPageContent({}: WatchPageContentProps) {
         return;
       }
       
-      setIsLoading(true); // For overall page data (like anime details)
-      setIsLoadingStream(true); // Specifically for stream links
+      setIsLoading(true); 
+      setIsLoadingStream(true); 
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined);
@@ -176,10 +176,12 @@ function WatchPageContent({}: WatchPageContentProps) {
       for (const key in streamingInfo.headers) {
         if (Object.prototype.hasOwnProperty.call(streamingInfo.headers, key)) {
           const headerValue = streamingInfo.headers[key];
+          // Browsers often block setting 'Referer' client-side due to security. 
+          // Other headers might be fine.
           if (headerValue && key.toLowerCase() !== 'referer') { 
              safeHeadersToSet[key] = headerValue as string;
           } else if (headerValue && key.toLowerCase() === 'referer') {
-            console.warn(`[WatchPageContent] Skipping setting Referer header via xhrSetup as it's usually blocked by browsers.`);
+            console.warn(`[WatchPageContent] Skipping setting Referer header via xhrSetup as it's usually blocked by browsers. Video host should ideally not require this from client. Actual Referer sent by browser will be your app's domain.`);
           }
         }
       }
@@ -244,49 +246,53 @@ function WatchPageContent({}: WatchPageContentProps) {
     if (!langLabel) return 'und';
     let lowerLangLabel = langLabel.toLowerCase().trim();
     
-    if (lowerLangLabel.includes('thumbnails')) return 'und';
+    if (lowerLangLabel.includes('thumbnails')) return 'und'; // Skip thumbnail tracks
 
-    const langMap: { [key: string]: string | undefined; regex?: RegExp }[] = [
-        { regex: /english|eng/i, code: "en" },
-        { regex: /spanish.*latin america|español.*la|es-la/i, code: "es-LA" },
-        { regex: /spanish|español|es /i, code: "es" }, // Added space for "CR_Spanish"
-        { regex: /portuguese.*brazil|português.*br|pt-br/i, code: "pt-BR" },
-        { regex: /portuguese|português|pt /i, code: "pt" },
-        { regex: /french|français|fr /i, code: "fr" },
-        { regex: /german|deutsch|de /i, code: "de" },
-        { regex: /italian|italiano|it /i, code: "it" },
-        { regex: /arabic|árabe|العربية|ar /i, code: "ar" },
-        { regex: /russian|русский|ru /i, code: "ru" },
-        { regex: /japanese|日本語|ja/i, code: "ja" },
-        { regex: /indonesian|bahasa indonesia|id/i, code: "id" },
-        { regex: /thai|ภาษาไทย|th/i, code: "th" },
-        { regex: /vietnamese|tiếng việt|vi/i, code: "vi" },
-        { regex: /malay|bahasa melayu|ms/i, code: "ms" },
-        { regex: /hindi|हिन्दी|hi/i, code: "hi" },
-        { regex: /korean|한국어|ko/i, code: "ko" },
-        { regex: /chinese|中文|zh/i, code: "zh" },
+    const langMap: { regex: RegExp; code: string }[] = [
+      { regex: /english|eng/i, code: "en" },
+      { regex: /spanish.*latin america|español.*la|es-la/i, code: "es-LA" },
+      { regex: /spanish|español|es(?:[^a-zA-Z]|$)/i, code: "es" }, // Matches 'es', 'es ', 'es-' but not 'estonia'
+      { regex: /portuguese.*brazil|português.*br|pt-br/i, code: "pt-BR" },
+      { regex: /portuguese|português|pt(?:[^a-zA-Z]|$)/i, code: "pt" },
+      { regex: /french|français|fr(?:[^a-zA-Z]|$)/i, code: "fr" },
+      { regex: /german|deutsch|de(?:[^a-zA-Z]|$)/i, code: "de" },
+      { regex: /italian|italiano|it(?:[^a-zA-Z]|$)/i, code: "it" },
+      { regex: /arabic|árabe|العربية|ar(?:[^a-zA-Z]|$)/i, code: "ar" },
+      { regex: /russian|русский|ru(?:[^a-zA-Z]|$)/i, code: "ru" },
+      { regex: /japanese|日本語|ja(?:[^a-zA-Z]|$)/i, code: "ja" },
+      { regex: /indonesian|bahasa indonesia|id(?:[^a-zA-Z]|$)/i, code: "id" },
+      { regex: /thai|ภาษาไทย|th(?:[^a-zA-Z]|$)/i, code: "th" },
+      { regex: /vietnamese|tiếng việt|vi(?:[^a-zA-Z]|$)/i, code: "vi" },
+      { regex: /malay|bahasa melayu|ms(?:[^a-zA-Z]|$)/i, code: "ms" },
+      { regex: /hindi|हिन्दी|hi(?:[^a-zA-Z]|$)/i, code: "hi" },
+      { regex: /korean|한국어|ko(?:[^a-zA-Z]|$)/i, code: "ko" },
+      { regex: /chinese|中文|zh(?:[^a-zA-Z]|$)/i, code: "zh" },
     ];
     
     for (const entry of langMap) {
-        if (entry.regex?.test(lowerLangLabel)) {
+        if (entry.regex.test(lowerLangLabel)) {
             console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched regex ${entry.regex} to '${entry.code}'.`);
-            return entry.code!;
+            return entry.code;
         }
     }
     
+    // Attempt to extract a simple 2 or 3 letter code if no full match
     const simpleCodeMatch = lowerLangLabel.match(/^([a-z]{2,3})(?:[^\w(]|$)/i);
     if (simpleCodeMatch) {
-        console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched simple code '${simpleCodeMatch[1]}'.`);
-        return simpleCodeMatch[1];
+        const extractedCode = simpleCodeMatch[1].toLowerCase();
+        // Further validation could be added here if necessary (e.g., check against a list of valid ISO codes)
+        console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched simple code '${extractedCode}'.`);
+        return extractedCode;
     }
 
-    console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', falling back to 'und'.`);
+    const mainLangPart = lowerLangLabel.split(/[-_\s(]/)[0];
+    console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
     return 'und';
   };
 
 
   const getDirectSubtitleUrl = (originalUrl: string): string => {
-    console.log("[WatchPageContent] Using direct URL for subtitle (no proxy):", originalUrl);
+    // console.log("[WatchPageContent] Using direct URL for subtitle (no proxy):", originalUrl);
     return originalUrl;
   };
   
@@ -317,7 +323,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   }, [actualSubtitles]);
 
 
-  if (isLoading && !animeDetails) { // Initial loading for anime details
+  if (isLoading && !animeDetails) { 
      return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.32))] text-center">
             <Loader2 className="w-16 h-16 text-primary animate-spin mb-4" />
@@ -351,8 +357,8 @@ function WatchPageContent({}: WatchPageContentProps) {
 
   return (
     <div className="flex flex-col md:flex-row gap-4 lg:gap-6 py-4 md:py-6 max-w-none">
-      {/* Left Column: Episode List */}
-      <div className="w-full md:w-1/4 lg:w-1/5">
+      {/* Left Column: Episode List (Desktop) */}
+      <div className="w-full md:w-1/4 lg:w-1/5 hidden md:block">
         <Card className="h-full flex flex-col shadow-lg bg-card border-border/60">
           <CardHeader className="p-4 border-b border-border/60">
             <CardTitle className="text-lg flex items-center text-primary">
@@ -366,7 +372,7 @@ function WatchPageContent({}: WatchPageContentProps) {
             )}
           </CardHeader>
           <CardContent className="p-0 flex-grow">
-            <ScrollArea className="h-[calc(100vh-200px)] md:h-[calc(100vh-150px)]"> {/* Adjust height as needed */}
+            <ScrollArea className="h-[calc(100vh-200px)] md:h-[calc(100vh-150px)]">
               <div className="p-2 space-y-1">
                 {animeDetails?.episodes && animeDetails.episodes.length > 0 ? (
                   animeDetails.episodes.map((episode: Episode) => (
@@ -423,14 +429,14 @@ function WatchPageContent({}: WatchPageContentProps) {
               key={playerSrcUrl} 
               title={`${animeDetails?.title || 'Episode'} ${currentEpNumber}`}
               src={{ src: playerSrcUrl, type: currentSource.isM3U8 ? 'application/x-mpegurl' : 'video/mp4' }}
-              className="w-full aspect-video" // Removed rounded-lg and shadow from here, parent has it
+              className="w-full aspect-video"
               crossOrigin 
               playsInline
-              onProviderChange={(provider: MediaProviderAdapter | null) => {
-                console.log("[WatchPageContent] onProviderChange triggered. Provider:", provider);
-                if (provider?.type === 'hls') {
-                    console.log("[WatchPageContent] HLS provider instance obtained via onProviderChange:", provider);
-                    setHlsProvider(provider as HLSProvider);
+               onProviderChange={(providerAdapter: MediaProviderAdapter | null) => {
+                console.log("[WatchPageContent] onProviderChange triggered. Provider:", providerAdapter);
+                if (providerAdapter?.type === 'hls') {
+                    console.log("[WatchPageContent] HLS provider instance obtained via onProviderChange:", providerAdapter);
+                    setHlsProvider(providerAdapter as HLSProvider);
                 } else {
                      console.log("[WatchPageContent] Non-HLS provider or null. Clearing HLS instance from onProviderChange.");
                     setHlsProvider(null);
@@ -444,17 +450,17 @@ function WatchPageContent({}: WatchPageContentProps) {
               }}
             >
               <MediaProvider>
-                {actualSubtitles.map((sub) => {
+                 {actualSubtitles.map((sub) => {
                   const trackLang = getLangCode(sub.lang);
                    if (trackLang === 'und') { 
                       console.log(`[WatchPageContent] Skipping Vidstack <Track> for lang: '${sub.lang}' (code 'und'). URL: ${sub.url}`);
                       return null;
                   }
                   const subtitleUrl = getDirectSubtitleUrl(sub.url); 
-                  console.log(`[WatchPageContent] Rendering Vidstack <Track>: lang='${sub.lang}', srcLang='${trackLang}', default=${trackLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
+                  console.log(`[WatchPageContent] Rendering track: lang='${sub.lang}', srcLang='${trackLang}', default=${trackLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
                   return (
                     <Track
-                      key={subtitleUrl} 
+                      key={sub.url} 
                       src={subtitleUrl}
                       kind="subtitles" 
                       label={sub.lang} 
@@ -479,6 +485,47 @@ function WatchPageContent({}: WatchPageContentProps) {
           )}
         </div>
         
+        {/* Mobile Episode Selector */}
+        <div className="block md:hidden mt-4">
+            <Card className="bg-card border-border/60">
+                <CardHeader className="p-3 border-b border-border/60">
+                    <CardTitle className="text-md flex items-center text-primary">
+                        <ListVideo className="w-4 h-4 mr-2" />
+                        Episodes
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-2">
+                    <ScrollArea className="w-full whitespace-nowrap">
+                        <div className="flex space-x-2 pb-2">
+                        {animeDetails?.episodes && animeDetails.episodes.length > 0 ? (
+                            animeDetails.episodes.map((episode: Episode) => (
+                            <Link 
+                                key={`mob-${episode.id}`}
+                                href={`/watch?ep=${encodeURIComponent(episode.id)}&animeId=${animeId}&epNum=${episode.number}`}
+                                passHref
+                            >
+                                <Button
+                                variant={episode.number === currentEpNumber ? "default" : "outline"}
+                                size="sm"
+                                className={`h-9 w-12 text-xs flex-shrink-0
+                                            ${episode.number === currentEpNumber 
+                                                ? 'bg-primary text-primary-foreground' 
+                                                : 'border-primary/30 text-primary hover:bg-primary/10 hover:text-primary-foreground'}`}
+                                >
+                                {episode.number}
+                                </Button>
+                            </Link>
+                            ))
+                        ) : (
+                            <p className="p-2 text-xs text-muted-foreground">No episodes.</p>
+                        )}
+                        </div>
+                        <ScrollBar orientation="horizontal" />
+                    </ScrollArea>
+                </CardContent>
+            </Card>
+        </div>
+
         {/* Episode Title and Server/Quality Controls */}
         <Card className="shadow-md bg-card border-border/60">
           <CardContent className="p-4 space-y-4">
@@ -609,5 +656,4 @@ export default function WatchPage() {
     </Suspense>
   );
 }
-
     
