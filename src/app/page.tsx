@@ -8,9 +8,9 @@ import { Separator } from '@/components/ui/separator';
 
 export default async function HomePage() {
   const [trendingAnimeResult, popularAnimeResult, recentEpisodesResult] = await Promise.allSettled([
-    getTrendingAnimeList(1),     // For Hero Carousel & "New Added" column
-    getPopularAnimeList(1),      // For "Popular Series" slider & "Popular Right Now" column & Top Anime Sidebar
-    getRecentEpisodesList(1)     // For "Recently Uploaded" slider & "New Release" column
+    getTrendingAnimeList(1),
+    getPopularAnimeList(1),
+    getRecentEpisodesList(1)
   ]);
 
   const trendingAnime = trendingAnimeResult.status === 'fulfilled' ? trendingAnimeResult.value : [];
@@ -20,16 +20,20 @@ export default async function HomePage() {
   const carouselItems = trendingAnime.slice(0, 8);
   const recentEpisodesForSlider = recentEpisodes.slice(0, 20);
   const popularAnimeForSlider = popularAnime.slice(0, 20);
-  const topAnimeForSidebar = popularAnime.slice(0, 10); // Top 10 for the sidebar
+  const topAnimeForSidebar = popularAnime.slice(0, 10);
 
-  // Data for the 3-column list section
   const newReleaseItems = recentEpisodes.slice(0, 5);
   const newAddedItems = trendingAnime.slice(0, 5); 
   const popularRightNowItems = popularAnime.slice(0, 5);
 
+  // Header height is h-16 (4rem). Main content in layout.tsx has py-8 (2rem top/bottom padding).
+  // Sidebar sticky top should be 4rem (header) + 2rem (main padding top) = 6rem.
+  const sidebarStickyTopClass = "top-[calc(theme(spacing.16)_+_theme(spacing.8))]"; 
+  // Sidebar max height: 100vh - (header_height + main_padding_top) - main_padding_bottom
+  const sidebarMaxHeightClass = "max-h-[calc(100vh_-_theme(spacing.16)_-_theme(spacing.8)_-_theme(spacing.8))]";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(300px,380px)] gap-x-8 gap-y-10"> {/* Main content and sidebar */}
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-x-8 gap-y-10"> {/* Explicit sidebar width */}
       {/* Main content column */}
       <div className="space-y-10 md:space-y-14 lg:col-span-1">
         <HeroCarousel items={carouselItems} />
@@ -44,7 +48,6 @@ export default async function HomePage() {
 
         <Separator className="my-8 md:my-12 bg-border/30" />
 
-        {/* 3-Column List Section */}
         <section className="py-8 md:py-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
             {newReleaseItems.length > 0 && (
@@ -95,7 +98,9 @@ export default async function HomePage() {
       </div>
 
       {/* Sidebar column */}
-      <aside className="hidden lg:block lg:col-span-1 sticky top-20 h-[calc(100vh-5rem-2.5rem)] "> {/* Adjust stickiness and height as needed */}
+      <aside 
+        className={`hidden lg:block lg:col-span-1 sticky ${sidebarStickyTopClass} ${sidebarMaxHeightClass} border-2 border-destructive`} // TEMPORARY BORDER FOR DEBUGGING
+      >
         {topAnimeForSidebar.length > 0 ? (
           <TopAnimeSidebar animeList={topAnimeForSidebar} />
         ) : (
