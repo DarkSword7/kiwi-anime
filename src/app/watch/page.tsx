@@ -176,8 +176,6 @@ function WatchPageContent({}: WatchPageContentProps) {
       for (const key in streamingInfo.headers) {
         if (Object.prototype.hasOwnProperty.call(streamingInfo.headers, key)) {
           const headerValue = streamingInfo.headers[key];
-          // Browsers often block setting 'Referer' client-side due to security. 
-          // Other headers might be fine.
           if (headerValue && key.toLowerCase() !== 'referer') { 
              safeHeadersToSet[key] = headerValue as string;
           } else if (headerValue && key.toLowerCase() === 'referer') {
@@ -243,21 +241,22 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
   const getLangCode = (langLabel: string): string => {
-    if (!langLabel) return 'und';
+    if (!langLabel) return 'und'; // Undetermined
     let lowerLangLabel = langLabel.toLowerCase().trim();
-    
+
+    // Handle specific cases like "Thumbnails"
     if (lowerLangLabel.includes('thumbnails')) return 'und'; // Skip thumbnail tracks
 
     const langMap: { regex: RegExp; code: string }[] = [
-      { regex: /english|eng/i, code: "en" },
-      { regex: /spanish.*latin america|español.*la|es-la/i, code: "es-LA" },
-      { regex: /spanish|español|es(?:[^a-zA-Z]|$)/i, code: "es" }, // Matches 'es', 'es ', 'es-' but not 'estonia'
-      { regex: /portuguese.*brazil|português.*br|pt-br/i, code: "pt-BR" },
+      { regex: /english|eng(?:[^a-zA-Z]|$)/i, code: "en" },
+      { regex: /spanish.*latin america|español.*am(?:é|e)rica latina|es-la/i, code: "es-LA" },
+      { regex: /spanish|español|es(?:[^a-zA-Z]|$)/i, code: "es" },
+      { regex: /portuguese.*brazil|português.*brasil|pt-br/i, code: "pt-BR" },
       { regex: /portuguese|português|pt(?:[^a-zA-Z]|$)/i, code: "pt" },
       { regex: /french|français|fr(?:[^a-zA-Z]|$)/i, code: "fr" },
       { regex: /german|deutsch|de(?:[^a-zA-Z]|$)/i, code: "de" },
       { regex: /italian|italiano|it(?:[^a-zA-Z]|$)/i, code: "it" },
-      { regex: /arabic|árabe|العربية|ar(?:[^a-zA-Z]|$)/i, code: "ar" },
+      { regex: /arabic|العربية|ar(?:[^a-zA-Z]|$)/i, code: "ar" }, // Simpler Arabic regex
       { regex: /russian|русский|ru(?:[^a-zA-Z]|$)/i, code: "ru" },
       { regex: /japanese|日本語|ja(?:[^a-zA-Z]|$)/i, code: "ja" },
       { regex: /indonesian|bahasa indonesia|id(?:[^a-zA-Z]|$)/i, code: "id" },
@@ -276,13 +275,14 @@ function WatchPageContent({}: WatchPageContentProps) {
         }
     }
     
-    // Attempt to extract a simple 2 or 3 letter code if no full match
-    const simpleCodeMatch = lowerLangLabel.match(/^([a-z]{2,3})(?:[^\w(]|$)/i);
-    if (simpleCodeMatch) {
-        const extractedCode = simpleCodeMatch[1].toLowerCase();
-        // Further validation could be added here if necessary (e.g., check against a list of valid ISO codes)
-        console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched simple code '${extractedCode}'.`);
-        return extractedCode;
+    // Attempt to extract a simple 2 or 3 letter code if no full match and not specific "CR_" prefix
+    if (!lowerLangLabel.startsWith('cr_')) {
+        const simpleCodeMatch = lowerLangLabel.match(/^([a-z]{2,3})(?:[^\w(]|$)/i);
+        if (simpleCodeMatch) {
+            const extractedCode = simpleCodeMatch[1].toLowerCase();
+            console.log(`[WatchPageContent] getLangCode: '${langLabel}' matched simple code '${extractedCode}'.`);
+            return extractedCode;
+        }
     }
 
     const mainLangPart = lowerLangLabel.split(/[-_\s(]/)[0];
@@ -472,7 +472,7 @@ function WatchPageContent({}: WatchPageContentProps) {
                   );
                 })}
               </MediaProvider>
-              <Captions className="vds-captions font-semibold text-lg" /> 
+              <Captions className="vds-captions font-semibold text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl px-6 py-2 bg-black/70 rounded-lg shadow-xl [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]" /> 
               <DefaultVideoLayout icons={defaultLayoutIcons} className="text-foreground data-[focus]:ring-primary/80" />
             </MediaPlayer>
           )}
