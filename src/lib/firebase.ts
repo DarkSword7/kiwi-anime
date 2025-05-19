@@ -1,8 +1,7 @@
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-// import { getFirestore } from 'firebase/firestore'; // Example if you use Firestore
-// import { getStorage } from 'firebase/storage'; // Example if you use Storage
+import { getFirestore } from 'firebase/firestore'; // Added Firestore import
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,15 +15,11 @@ const firebaseConfig = {
 
 let app: FirebaseApp;
 
-// Check if all required Firebase config keys are present
 const requiredKeys: (keyof typeof firebaseConfig)[] = ['apiKey', 'authDomain', 'projectId'];
 const missingKeys = requiredKeys.filter(key => !firebaseConfig[key]);
 
 if (missingKeys.length > 0) {
-  console.error(`Firebase configuration is missing: ${missingKeys.join(', ')}. Please set these in your .env.local file or environment variables.`);
-  // Depending on your error handling strategy, you might throw an error here
-  // or allow the app to continue, knowing auth will fail.
-  // For now, we let it proceed so Firebase can throw its specific error.
+  console.error(`Firebase configuration is missing: ${missingKeys.join(', ')}. Please set NEXT_PUBLIC_ prefixed environment variables.`);
 }
 
 if (!getApps().length) {
@@ -33,24 +28,21 @@ if (!getApps().length) {
       app = initializeApp(firebaseConfig);
     } catch (error) {
       console.error("Error initializing Firebase app:", error);
-      // Handle initialization error, perhaps by setting `app` to a state that indicates failure
-      // or re-throwing for a global error boundary to catch.
-      // For now, we'll let subsequent `getAuth` fail if `app` isn't initialized.
     }
   } else {
-    console.error("Firebase app not initialized due to missing critical configuration (apiKey, authDomain, projectId).");
+    console.error("Firebase app not initialized due to missing critical configuration (NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID).");
   }
 } else {
+  // @ts-ignore
   app = getApps()[0];
 }
 
-// Initialize Firebase services only if the app was successfully initialized
 // @ts-ignore
 const auth = app ? getAuth(app) : null;
 // @ts-ignore
 const googleProvider = app ? new GoogleAuthProvider() : null;
-// const db = app ? getFirestore(app) : null; // Example
-// const storage = app ? getStorage(app) : null; // Example
+// @ts-ignore
+const db = app ? getFirestore(app) : null; // Initialize Firestore
 
 // @ts-ignore
-export { app, auth, googleProvider };
+export { app, auth, googleProvider, db };
