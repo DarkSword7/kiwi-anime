@@ -9,15 +9,14 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { EmailPasswordForm } from "./EmailPasswordForm";
 import { GoogleSignInButton } from "./GoogleSignInButton";
-import { AuthError } from 'firebase/auth';
+// AuthError is not directly exported for instanceof checks this way.
+// We will check for error.code instead.
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -47,7 +46,8 @@ export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
     } catch (error: any) {
       console.error("Auth Error:", error);
       let errorMessage = "An unexpected error occurred.";
-      if (error instanceof AuthError) {
+      // Check for Firebase error codes
+      if (error && typeof error.code === 'string') {
         switch (error.code) {
           case 'auth/email-already-in-use':
             errorMessage = 'This email is already in use. Try logging in.';
@@ -60,7 +60,7 @@ export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
             break;
           case 'auth/user-not-found':
           case 'auth/wrong-password':
-          case 'auth/invalid-credential': // Generic error for wrong email/password
+          case 'auth/invalid-credential': 
             errorMessage = 'Invalid email or password.';
             break;
           default:
@@ -92,7 +92,22 @@ export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
       setForgotPasswordView(false);
       setResetEmail("");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to send reset email." });
+      let errorMessage = "Failed to send reset email.";
+      if (error && typeof error.code === 'string') {
+        switch(error.code) {
+          case 'auth/invalid-email':
+            errorMessage = "Please enter a valid email address.";
+            break;
+          case 'auth/user-not-found':
+            errorMessage = "No user found with this email address.";
+            break;
+          default:
+            errorMessage = error.message || errorMessage;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      toast({ variant: "destructive", title: "Error", description: errorMessage });
     } finally {
       setLoading(false);
     }
@@ -146,7 +161,7 @@ export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={loading}>
                 {loading ? "Sending..." : "Send Reset Link"}
               </Button>
-              <Button variant="link" className="w-full text-primary" onClick={() => setForgotPasswordView(false)}>
+              <Button variant="link" type="button" className="w-full text-primary" onClick={() => setForgotPasswordView(false)}>
                 Back to Log In
               </Button>
             </form>

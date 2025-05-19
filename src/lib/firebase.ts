@@ -16,15 +16,41 @@ const firebaseConfig = {
 
 let app: FirebaseApp;
 
+// Check if all required Firebase config keys are present
+const requiredKeys: (keyof typeof firebaseConfig)[] = ['apiKey', 'authDomain', 'projectId'];
+const missingKeys = requiredKeys.filter(key => !firebaseConfig[key]);
+
+if (missingKeys.length > 0) {
+  console.error(`Firebase configuration is missing: ${missingKeys.join(', ')}. Please set these in your .env.local file or environment variables.`);
+  // Depending on your error handling strategy, you might throw an error here
+  // or allow the app to continue, knowing auth will fail.
+  // For now, we let it proceed so Firebase can throw its specific error.
+}
+
 if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
+  if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
+    try {
+      app = initializeApp(firebaseConfig);
+    } catch (error) {
+      console.error("Error initializing Firebase app:", error);
+      // Handle initialization error, perhaps by setting `app` to a state that indicates failure
+      // or re-throwing for a global error boundary to catch.
+      // For now, we'll let subsequent `getAuth` fail if `app` isn't initialized.
+    }
+  } else {
+    console.error("Firebase app not initialized due to missing critical configuration (apiKey, authDomain, projectId).");
+  }
 } else {
   app = getApps()[0];
 }
 
-const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
-// const db = getFirestore(app); // Example
-// const storage = getStorage(app); // Example
+// Initialize Firebase services only if the app was successfully initialized
+// @ts-ignore
+const auth = app ? getAuth(app) : null;
+// @ts-ignore
+const googleProvider = app ? new GoogleAuthProvider() : null;
+// const db = app ? getFirestore(app) : null; // Example
+// const storage = app ? getStorage(app) : null; // Example
 
+// @ts-ignore
 export { app, auth, googleProvider };

@@ -4,7 +4,8 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { AuthError } from "firebase/auth";
+// AuthError is not directly exported for instanceof checks this way.
+// We will check for error.code instead.
 
 interface GoogleSignInButtonProps {
   onSignInSuccess?: () => void;
@@ -27,7 +28,8 @@ export function GoogleSignInButton({ onSignInSuccess, onSignInError, className }
     } catch (error: any) {
       console.error("Google Sign-In Error:", error);
       let errorMessage = "An unexpected error occurred during Google Sign-In.";
-      if (error instanceof AuthError) {
+      // Check for Firebase error codes
+      if (error && typeof error.code === 'string') {
         switch (error.code) {
           case "auth/popup-closed-by-user":
             errorMessage = "Sign-in popup closed by user.";
