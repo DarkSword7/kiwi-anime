@@ -7,7 +7,6 @@ import {
   getPopularAnimeList, 
   getTrendingAnimeList, 
   getRecentEpisodesList,
-  getMostFavoriteAnimeList,
   getLatestCompletedAnimeList,
   getRecentlyAddedAnimeList
 } from '@/services/anime-service';
@@ -18,14 +17,12 @@ export default async function HomePage() {
     trendingAnimeResult, 
     popularAnimeResult, 
     recentEpisodesResult,
-    mostFavoriteAnimeResult,
     latestCompletedAnimeResult,
     recentlyAddedAnimeResult
   ] = await Promise.allSettled([
-    getTrendingAnimeList(1),    // For Hero Carousel
+    getTrendingAnimeList(1),    // For Hero Carousel & Top Anime Sidebar
     getPopularAnimeList(1),     // For Popular Series Slider
     getRecentEpisodesList(1),   // For Recently Uploaded Slider & New Release Column
-    getMostFavoriteAnimeList(1),// For Top Anime Sidebar
     getLatestCompletedAnimeList(1), // For Latest Completed Column
     getRecentlyAddedAnimeList(1)  // For Recently Added Column
   ]);
@@ -33,7 +30,6 @@ export default async function HomePage() {
   const trendingAnime = trendingAnimeResult.status === 'fulfilled' ? trendingAnimeResult.value : [];
   const popularAnime = popularAnimeResult.status === 'fulfilled' ? popularAnimeResult.value : [];
   const recentEpisodes = recentEpisodesResult.status === 'fulfilled' ? recentEpisodesResult.value : [];
-  const mostFavoriteAnime = mostFavoriteAnimeResult.status === 'fulfilled' ? mostFavoriteAnimeResult.value : [];
   const latestCompletedAnime = latestCompletedAnimeResult.status === 'fulfilled' ? latestCompletedAnimeResult.value : [];
   const recentlyAddedAnime = recentlyAddedAnimeResult.status === 'fulfilled' ? recentlyAddedAnimeResult.value : [];
   
@@ -45,7 +41,7 @@ export default async function HomePage() {
   const recentlyAddedItems = recentlyAddedAnime.slice(0, 5); 
   const latestCompletedItems = latestCompletedAnime.slice(0, 5);
 
-  const topAnimeForSidebar = mostFavoriteAnime.slice(0, 10);
+  const topAnimeForSidebar = trendingAnime.slice(0, 10); // Changed to use trendingAnime
 
   const sidebarStickyTopClass = "top-[calc(theme(spacing.16)_+_theme(spacing.8))]"; 
   const sidebarMaxHeightClass = "max-h-[calc(100vh_-_theme(spacing.16)_-_theme(spacing.8)_-_theme(spacing.8))]";
