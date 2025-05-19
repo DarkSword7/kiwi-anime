@@ -2,7 +2,7 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export interface CommentData {
-  animeId: string;
+  episodeId: string; // ID of the episode the comment belongs to
   text: string;
   userId: string;
   userDisplayName: string | null;

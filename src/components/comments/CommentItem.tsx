@@ -8,17 +8,17 @@ import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { MessageSquare, ShieldAlert } from 'lucide-react';
 import { CommentForm } from './CommentForm';
-import { CommentsList } from './CommentsList'; // For nested replies
+import { CommentsList } from './CommentsList'; 
 import { useAuth } from '@/hooks/useAuth';
 
 interface CommentItemProps {
   comment: CommentDocument;
-  animeId: string;
-  onCommentPosted: () => void; // To refresh list after reply
+  episodeId: string; // Changed from animeId
+  onCommentPosted: () => void; 
   isNested?: boolean;
 }
 
-export function CommentItem({ comment, animeId, onCommentPosted, isNested = false }: CommentItemProps) {
+export function CommentItem({ comment, episodeId, onCommentPosted, isNested = false }: CommentItemProps) {
   const { user } = useAuth();
   const [isSpoilerVisible, setIsSpoilerVisible] = useState(false);
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -41,7 +41,7 @@ export function CommentItem({ comment, animeId, onCommentPosted, isNested = fals
 
   const handleReplyPosted = () => {
     setShowReplyForm(false);
-    onCommentPosted(); // This should ideally trigger a refresh of this specific comment's replies
+    onCommentPosted(); 
   }
 
   return (
@@ -58,7 +58,6 @@ export function CommentItem({ comment, animeId, onCommentPosted, isNested = fals
             <p className="text-sm font-semibold text-foreground">{comment.userDisplayName || 'Anonymous'}</p>
             <p className="text-xs text-muted-foreground">{formattedDate}</p>
           </div>
-          {/* Future: Edit/Delete buttons for comment.userId === user?.uid */}
         </div>
         
         {comment.isSpoiler && !isSpoilerVisible ? (
@@ -81,13 +80,12 @@ export function CommentItem({ comment, animeId, onCommentPosted, isNested = fals
               <MessageSquare className="w-3.5 h-3.5 mr-1" /> Reply
             </Button>
           )}
-          {/* Future: Like button */}
         </div>
 
         {showReplyForm && user && (
           <div className="mt-2 pt-2 border-t border-border/30">
             <CommentForm
-              animeId={animeId}
+              episodeId={episodeId} // Pass episodeId
               parentId={comment.id}
               onCommentPosted={handleReplyPosted}
               placeholder={`Replying to ${comment.userDisplayName || 'User'}...`}
@@ -98,11 +96,10 @@ export function CommentItem({ comment, animeId, onCommentPosted, isNested = fals
           </div>
         )}
 
-        {/* Render replies if any */}
         {(comment.replyCount ?? 0) > 0 && (
-           <div className={`mt-3 pt-3 border-t border-border/30`}>
+           <div className={`mt-3 pt-3 ${!isNested || (isNested && showReplyForm) ? 'border-t border-border/30' : ''}`}>
             <CommentsList 
-                animeId={animeId} 
+                episodeId={episodeId} // Pass episodeId
                 parentId={comment.id} 
                 onCommentPosted={onCommentPosted} 
                 isNested={true}

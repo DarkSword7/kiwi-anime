@@ -7,22 +7,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { CommentForm } from './CommentForm';
 import { CommentsList } from './CommentsList';
 import { Button } from '@/components/ui/button';
-import { AuthModal } from '@/components/AuthModal'; // Assuming you want to trigger this
+import { AuthModal } from '@/components/AuthModal'; 
 
 interface CommentsSectionProps {
-  animeId: string;
+  episodeId: string; // Changed from animeId to episodeId
 }
 
-export function CommentsSection({ animeId }: CommentsSectionProps) {
+export function CommentsSection({ episodeId }: CommentsSectionProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
 
   const handleCommentPosted = () => {
-    // Invalidate queries to refetch comments
-    queryClient.invalidateQueries({ queryKey: ['comments', animeId, 'topLevel'] });
-    // Potentially invalidate all reply queries too if needed, or manage more granularly
-    queryClient.invalidateQueries({ queryKey: ['comments', animeId, 'replies'] });
+    queryClient.invalidateQueries({ queryKey: ['comments', episodeId, 'topLevel'] });
+    queryClient.invalidateQueries({ queryKey: ['comments', 'replies'] }); // Invalidate all reply queries
   };
 
   return (
@@ -32,13 +30,9 @@ export function CommentsSection({ animeId }: CommentsSectionProps) {
           Comments
         </h2>
 
-        <div className="bg-card/50 border border-border/50 rounded-lg p-4 md:p-6 shadow-lg"
-             style={{
-                backgroundColor: 'hsl(270 40% 18%)', // Dark purple background from image
-             }}
-        >
+        <div className="bg-card/50 border border-border/50 rounded-lg p-4 md:p-6 shadow-lg">
           {user ? (
-            <CommentForm animeId={animeId} onCommentPosted={handleCommentPosted} />
+            <CommentForm episodeId={episodeId} onCommentPosted={handleCommentPosted} />
           ) : (
             <div className="text-center py-6">
               <p className="text-muted-foreground mb-4">You need to be logged in to post a comment.</p>
@@ -53,7 +47,7 @@ export function CommentsSection({ animeId }: CommentsSectionProps) {
         </div>
 
         <div className="mt-8">
-          <CommentsList animeId={animeId} onCommentPosted={handleCommentPosted} />
+          <CommentsList episodeId={episodeId} onCommentPosted={handleCommentPosted} />
         </div>
       </div>
       <AuthModal isOpen={isAuthModalOpen} onOpenChange={setIsAuthModalOpen} />

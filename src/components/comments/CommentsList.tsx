@@ -3,30 +3,29 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getCommentsForAnime, getRepliesForComment } from '@/services/comments-service';
+import { getCommentsForEpisode, getRepliesForComment } from '@/services/comments-service';
 import { CommentItem } from './CommentItem';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2 } from 'lucide-react';
 
 interface CommentsListProps {
-  animeId: string;
+  episodeId: string; // Changed from animeId
   parentId?: string | null;
-  onCommentPosted: () => void; // To trigger refetch
+  onCommentPosted: () => void; 
   isNested?: boolean;
 }
 
-export function CommentsList({ animeId, parentId = null, onCommentPosted, isNested = false }: CommentsListProps) {
-  const queryKey = parentId ? ['comments', animeId, 'replies', parentId] : ['comments', animeId, 'topLevel'];
+export function CommentsList({ episodeId, parentId = null, onCommentPosted, isNested = false }: CommentsListProps) {
+  const queryKey = parentId 
+    ? ['comments', 'replies', parentId] // Replies are fetched by parentId directly
+    : ['comments', episodeId, 'topLevel']; // Top-level comments fetched by episodeId
   
   const fetchFn = parentId 
     ? () => getRepliesForComment(parentId) 
-    : () => getCommentsForAnime(animeId);
+    : () => getCommentsForEpisode(episodeId);
 
   const { data: comments, isLoading, isError, error } = useQuery({
     queryKey: queryKey,
     queryFn: fetchFn,
-    // staleTime: 1000 * 60 * 5, // 5 minutes
-    // refetchOnWindowFocus: false,
   });
 
   if (isLoading) {
@@ -60,7 +59,7 @@ export function CommentsList({ animeId, parentId = null, onCommentPosted, isNest
         <CommentItem 
             key={comment.id} 
             comment={comment} 
-            animeId={animeId} 
+            episodeId={episodeId} // Pass episodeId
             onCommentPosted={onCommentPosted}
             isNested={isNested}
         />

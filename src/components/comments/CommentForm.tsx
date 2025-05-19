@@ -12,9 +12,9 @@ import { addComment } from '@/services/comments-service';
 import { Loader2 } from 'lucide-react';
 
 interface CommentFormProps {
-  animeId: string;
+  episodeId: string; // Changed from animeId
   parentId?: string | null;
-  onCommentPosted?: () => void; // Callback after successful post
+  onCommentPosted?: () => void;
   placeholder?: string;
   buttonText?: string;
   showCancelButton?: boolean;
@@ -22,7 +22,7 @@ interface CommentFormProps {
 }
 
 export function CommentForm({
-  animeId,
+  episodeId,
   parentId = null,
   onCommentPosted,
   placeholder = "Add a comment...",
@@ -58,7 +58,7 @@ export function CommentForm({
     setIsSubmitting(true);
     try {
       const newCommentId = await addComment(
-        animeId,
+        episodeId, // Use episodeId here
         commentText.trim(),
         isSpoiler,
         user.uid,
@@ -104,13 +104,13 @@ export function CommentForm({
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Checkbox
-            id={`spoiler-${parentId || 'top'}`}
+            id={`spoiler-${parentId || 'top'}-${episodeId}`} // Added episodeId for unique ID
             checked={isSpoiler}
             onCheckedChange={(checked) => setIsSpoiler(Boolean(checked))}
             disabled={isSubmitting || !user}
             className="border-muted-foreground data-[state=checked]:bg-primary data-[state=checked]:border-primary"
           />
-          <Label htmlFor={`spoiler-${parentId || 'top'}`} className="text-sm text-muted-foreground">
+          <Label htmlFor={`spoiler-${parentId || 'top'}-${episodeId}`} className="text-sm text-muted-foreground">
             Mark as Spoiler
           </Label>
         </div>
@@ -140,7 +140,7 @@ export function CommentForm({
       </div>
       {!user && (
         <p className="text-sm text-center text-muted-foreground">
-          Please <button type="button" onClick={() => {/* Logic to open AuthModal, assuming it's globally accessible or passed via context/prop */} } className="text-primary hover:underline">log in</button> to comment.
+          Please <button type="button" onClick={() => {/* Consider triggering AuthModal here if available globally */} } className="text-primary hover:underline">log in</button> to comment.
         </p>
       )}
     </form>
