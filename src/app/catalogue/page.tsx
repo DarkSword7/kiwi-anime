@@ -11,7 +11,7 @@ import {
   getSpecialsList,
   getTVShowsList,
   getAnimeByGenre,
-  getTopAiringAnimeList, // Default fetch
+  getTrendingAnimeList, // Ensured correct function name
 } from '@/services/anime-service';
 import type { AnimeSearchResult, PaginatedAnimeResults } from '@/types/anime';
 import { CatalogueAnimeCard } from '@/components/catalogue/CatalogueAnimeCard';
@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, Loader2, LayoutGrid } from 'lucide-react';
 import CatalogueLoading from './loading'; // Import the loading component
+import Link from 'next/link';
 
 function CataloguePageContent() {
   const router = useRouter();
@@ -67,13 +68,13 @@ function CataloguePageContent() {
           case 'ona': data = await getONASList(pageToFetch); break;
           case 'special': data = await getSpecialsList(pageToFetch); break;
           case 'tv': data = await getTVShowsList(pageToFetch); break;
-          default: data = await getTopAiringAnimeList(pageToFetch); // Fallback for unknown type
+          default: data = await getTrendingAnimeList(pageToFetch); // Fallback for unknown type
         }
       } else if (currentGenre) {
         data = await getAnimeByGenre(currentGenre, pageToFetch);
       } else {
-        // Default fetch if no filters are active (e.g., top airing or most popular)
-        data = await getTopAiringAnimeList(pageToFetch);
+        // Default fetch if no filters are active
+        data = await getTrendingAnimeList(pageToFetch); // Ensured correct function name
       }
     } catch (error) {
       console.error("Error fetching catalogue data:", error);
@@ -93,7 +94,7 @@ function CataloguePageContent() {
   const updateQueryParams = (paramsToUpdate: Record<string, string | null>) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));
     Object.entries(paramsToUpdate).forEach(([key, value]) => {
-      if (value === null) {
+      if (value === null || value === '') {
         current.delete(key);
       } else {
         current.set(key, value);
@@ -120,7 +121,7 @@ function CataloguePageContent() {
     setSelectedType(null);
     setSelectedGenre(null);
     setSearchTerm('');
-    updateQueryParams({ type: null, genre: null, q: null });
+    updateQueryParams({ type: null, genre: null, q: null, page: '1' });
   };
 
   const handlePageChange = (newPage: number) => {
@@ -128,7 +129,7 @@ function CataloguePageContent() {
   };
   
   // Determine title based on filters
-  let pageTitle = "Catalogue";
+  let pageTitle = "Browse Catalogue";
   const typeParam = searchParams.get('type');
   const genreParam = searchParams.get('genre');
   const qParam = searchParams.get('q');
@@ -138,6 +139,7 @@ function CataloguePageContent() {
   } else if (typeParam) {
     pageTitle = `${typeParam.charAt(0).toUpperCase() + typeParam.slice(1)} Anime`;
   } else if (genreParam) {
+     // Assuming genre names are human-readable, if not, we'd need a map from ID to title
     pageTitle = `${genreParam.charAt(0).toUpperCase() + genreParam.slice(1)} Genre`;
   }
 
@@ -160,7 +162,7 @@ function CataloguePageContent() {
         <div className="relative">
           <Input
             type="search"
-            placeholder="Search the catalogue..."
+            placeholder="Search the catalogue by title..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="h-12 pl-10 pr-12 text-base bg-card/70 border-border/50 focus:border-primary placeholder:text-muted-foreground"
@@ -188,9 +190,9 @@ function CataloguePageContent() {
             </div>
           )}
           {animeList.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-5"> {/* Adjusted to 3 columns for XL */}
               {animeList.map((anime) => (
-                <CatalogueAnimeCard key={anime.id + '-' + (anime.title || '')} anime={anime} />
+                <CatalogueAnimeCard key={anime.id + '-' + (anime.title || '') + '-' + currentPage} anime={anime} />
               ))}
             </div>
           )}
