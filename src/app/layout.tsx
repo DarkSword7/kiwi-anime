@@ -25,12 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
-        <Script
-          id="richads-script"
-          src="https://richinfo.co/richpartners/in-page/js/richads-ob.js?pubid=973533&siteid=363353"
-          async
-          strategy="afterInteractive" // Ensures it loads without blocking critical rendering
-        />
+        {/* RichAds script removed from here */}
       </head>
       <body className={`font-sans antialiased flex flex-col min-h-screen bg-background text-foreground`}>
         <Header />
