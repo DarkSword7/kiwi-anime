@@ -14,7 +14,7 @@ export function AnimeCard({ anime }: AnimeCardProps) {
   const dataAiHint = anime.image ? "anime poster portrait" : "placeholder anime";
 
   return (
-    <Link href={`/anime/${anime.id}`} passHref>
+    <Link href={`/anime/${anime.id}`} passHref prefetch={false}>
       <Card className="h-full flex flex-col bg-card border-border/50 rounded-lg overflow-hidden group transition-all duration-300 ease-in-out hover:shadow-xl hover:border-primary/50 hover:scale-[1.02]">
         <div className="relative aspect-[2/3] w-full overflow-hidden">
           <Image

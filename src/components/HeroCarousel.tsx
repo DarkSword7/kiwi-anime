@@ -16,10 +16,12 @@ export function HeroCarousel({ items }: HeroCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const handleNext = useCallback(() => {
+    if (items.length === 0) return;
     setCurrentIndex((prevIndex) => (prevIndex === items.length - 1 ? 0 : prevIndex + 1));
   }, [items.length]);
 
   const handlePrev = () => {
+    if (items.length === 0) return;
     setCurrentIndex((prevIndex) => (prevIndex === 0 ? items.length - 1 : prevIndex - 1));
   };
 
@@ -79,7 +81,7 @@ export function HeroCarousel({ items }: HeroCarouselProps) {
           Explore the world of {currentAnime.title}. Discover episodes, characters, and more.
         </p>
         <Button 
-          size="default" // Reduced from lg
+          size="default" 
           asChild 
           className="bg-primary hover:bg-accent text-primary-foreground text-sm md:text-base px-6 py-2.5 md:px-7 md:py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105"
         >

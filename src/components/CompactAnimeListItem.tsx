@@ -19,7 +19,7 @@ export function CompactAnimeListItem({ anime }: CompactAnimeListItemProps) {
   const IconComponent = anime.type?.toLowerCase().includes("movie") ? Clapperboard : Tv;
 
   return (
-    <Link href={`/anime/${anime.id}`} passHref>
+    <Link href={`/anime/${anime.id}`} passHref prefetch={false}>
       <div className="flex items-start space-x-3 p-3 bg-card/50 hover:bg-card/80 rounded-lg transition-colors duration-200 group">
         <div className="flex-shrink-0 w-16 h-24 relative rounded-md overflow-hidden">
           <Image

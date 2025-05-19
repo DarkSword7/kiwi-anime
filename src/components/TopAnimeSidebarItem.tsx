@@ -22,17 +22,18 @@ export function TopAnimeSidebarItem({ anime, rank }: TopAnimeSidebarItemProps) {
     2: 'border-pink-400',
     3: 'border-amber-400',
   };
-  const rankTextColor: { [key: number]: string } = {
+  const itemBorderColor = rankColors[rank] || 'border-transparent';
+  
+  const rankTextColors: { [key: number]: string } = {
     1: 'text-sky-400',
     2: 'text-pink-400',
     3: 'text-amber-400',
   };
+  const itemRankTextColor = rankTextColors[rank] || 'text-muted-foreground/60';
 
-  const itemBorderColor = rankColors[rank] || 'border-transparent';
-  const itemRankTextColor = rankTextColor[rank] || 'text-muted-foreground/60';
 
   return (
-    <Link href={`/anime/${anime.id}`} passHref>
+    <Link href={`/anime/${anime.id}`} passHref prefetch={false}>
       <div className={`flex items-center space-x-3 p-2.5 bg-card/30 hover:bg-card/70 rounded-md transition-all duration-200 group border-l-4 ${itemBorderColor} hover:shadow-lg`}>
         <div className={`w-10 text-center text-3xl font-bold ${itemRankTextColor} group-hover:text-primary transition-colors`}>
           {rank}
