@@ -11,6 +11,8 @@ import {
   getRecentlyAddedAnimeList
 } from '@/services/anime-service';
 import { Separator } from '@/components/ui/separator';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 export default async function HomePage() {
   const [
@@ -27,21 +29,22 @@ export default async function HomePage() {
     getRecentlyAddedAnimeList(1)  // For Recently Added Column
   ]);
 
-  const trendingAnime = trendingAnimeResult.status === 'fulfilled' ? trendingAnimeResult.value : [];
-  const popularAnime = popularAnimeResult.status === 'fulfilled' ? popularAnimeResult.value : [];
-  const recentEpisodes = recentEpisodesResult.status === 'fulfilled' ? recentEpisodesResult.value : [];
-  const latestCompletedAnime = latestCompletedAnimeResult.status === 'fulfilled' ? latestCompletedAnimeResult.value : [];
-  const recentlyAddedAnime = recentlyAddedAnimeResult.status === 'fulfilled' ? recentlyAddedAnimeResult.value : [];
+  const trendingAnime = trendingAnimeResult.status === 'fulfilled' ? trendingAnimeResult.value.results : [];
+  const popularAnime = popularAnimeResult.status === 'fulfilled' ? popularAnimeResult.value.results : [];
+  const recentEpisodes = recentEpisodesResult.status === 'fulfilled' ? recentEpisodesResult.value.results : [];
+  const latestCompletedAnime = latestCompletedAnimeResult.status === 'fulfilled' ? latestCompletedAnimeResult.value.results : [];
+  const recentlyAddedAnime = recentlyAddedAnimeResult.status === 'fulfilled' ? recentlyAddedAnimeResult.value.results : [];
   
   const carouselItems = trendingAnime.slice(0, 8);
-  const recentEpisodesForSlider = recentEpisodes.slice(0, 20);
-  const popularAnimeForSlider = popularAnime.slice(0, 20);
+  // For sliders, API often returns around 20 items per page, which is good for a slider.
+  const recentEpisodesForSlider = recentEpisodes; 
+  const popularAnimeForSlider = popularAnime;
   
   const newReleaseItems = recentEpisodes.slice(0, 5);
   const recentlyAddedItems = recentlyAddedAnime.slice(0, 5); 
   const latestCompletedItems = latestCompletedAnime.slice(0, 5);
 
-  const topAnimeForSidebar = trendingAnime.slice(0, 10); // Changed to use trendingAnime
+  const topAnimeForSidebar = trendingAnime.slice(0, 10); 
 
   const sidebarStickyTopClass = "top-[calc(theme(spacing.16)_+_theme(spacing.8))]"; 
   const sidebarMaxHeightClass = "max-h-[calc(100vh_-_theme(spacing.16)_-_theme(spacing.8)_-_theme(spacing.8))]";
@@ -52,24 +55,35 @@ export default async function HomePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,_1fr)_300px] gap-6">
         
-        <div className="space-y-10 md:space-y-14 order-1 lg:order-1 overflow-hidden">
+        <div className="space-y-8 md:space-y-10 order-1 lg:order-1 overflow-hidden"> {/* Reduced y-spacing slightly */}
           {recentEpisodesForSlider.length > 0 && (
-            <AnimeSlider title="Recently Uploaded" animeList={recentEpisodesForSlider} />
+            <AnimeSlider 
+              title="Recently Uploaded" 
+              animeList={recentEpisodesForSlider}
+              viewAllLink="/list/recent-episodes" 
+            />
           )}
 
           {popularAnimeForSlider.length > 0 && (
-             <AnimeSlider title="Popular Series" animeList={popularAnimeForSlider} />
+             <AnimeSlider 
+              title="Popular Series" 
+              animeList={popularAnimeForSlider}
+              viewAllLink="/list/popular"
+            />
           )}
 
-          <Separator className="my-8 md:my-12 bg-border/30" />
+          <Separator className="my-6 md:my-8 bg-border/30" /> {/* Reduced margin */}
 
-          <section className="py-8 md:py-6">
+          <section className="py-6 md:py-4"> {/* Reduced py */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
               {newReleaseItems.length > 0 && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-semibold text-foreground border-b-2 border-primary/50 pb-2 mb-4">
-                    New Release →
-                  </h3>
+                  <Link href="/list/recent-episodes" className="group">
+                    <h3 className="text-xl font-semibold text-foreground border-b-2 border-primary/50 pb-2 mb-4 flex justify-between items-center group-hover:text-primary transition-colors">
+                      New Release 
+                      <ArrowRight className="h-5 w-5 opacity-70 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                    </h3>
+                  </Link>
                   <div className="space-y-3">
                     {newReleaseItems.map((anime) => (
                       <CompactAnimeListItem key={`new-${anime.id}`} anime={anime} />
@@ -80,9 +94,12 @@ export default async function HomePage() {
 
               {recentlyAddedItems.length > 0 && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-semibold text-foreground border-b-2 border-primary/50 pb-2 mb-4">
-                    Recently Added →
-                  </h3>
+                   <Link href="/list/recently-added" className="group">
+                    <h3 className="text-xl font-semibold text-foreground border-b-2 border-primary/50 pb-2 mb-4 flex justify-between items-center group-hover:text-primary transition-colors">
+                      Recently Added
+                      <ArrowRight className="h-5 w-5 opacity-70 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                    </h3>
+                  </Link>
                   <div className="space-y-3">
                     {recentlyAddedItems.map((anime) => (
                       <CompactAnimeListItem key={`added-${anime.id}`} anime={anime} />
@@ -93,9 +110,12 @@ export default async function HomePage() {
               
               {latestCompletedItems.length > 0 && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-semibold text-foreground border-b-2 border-primary/50 pb-2 mb-4">
-                    Latest Completed →
-                  </h3>
+                  <Link href="/list/latest-completed" className="group">
+                    <h3 className="text-xl font-semibold text-foreground border-b-2 border-primary/50 pb-2 mb-4 flex justify-between items-center group-hover:text-primary transition-colors">
+                      Latest Completed
+                      <ArrowRight className="h-5 w-5 opacity-70 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                    </h3>
+                  </Link>
                   <div className="space-y-3">
                     {latestCompletedItems.map((anime) => (
                       <CompactAnimeListItem key={`completed-${anime.id}`} anime={anime} />
@@ -127,3 +147,4 @@ export default async function HomePage() {
     </div>
   );
 }
+

@@ -1,8 +1,8 @@
 
 'use server';
 
+import type { AnimeSearchResult, AnimeInfo, StreamingLinks, SubtitleTrack } from '@/types/anime';
 import axios from 'axios';
-import type { AnimeSearchResult, AnimeInfo, Episode, StreamingLinks, SubtitleTrack } from '@/types/anime';
 
 const API_BASE_URL = 'https://animefreestream.vercel.app';
 const ZORO_PROVIDER_PATH = '/anime/zoro';
@@ -16,36 +16,38 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
 
   if (axios.isAxiosError(error) && error.response) {
     let responseData: any = error.response.data;
-    if (typeof responseData === 'string') {
-      if (responseData.trim().startsWith('<!DOCTYPE html>') || responseData.trim().startsWith('<html')) {
-        responseData = '[HTML Response - Truncated]';
-      } else {
-        try {
-          const parsedJson = JSON.parse(responseData);
-          responseData = JSON.stringify(parsedJson, null, 2);
-          if (responseData.length > 1000) {
-             responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
-          }
-        } catch (e) {
-          // Keep as string if parsing fails, truncate if too long
-          responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated String]' : '');
+    // Check if responseData is HTML
+    if (typeof responseData === 'string' && responseData.trim().startsWith('<!DOCTYPE html>')) {
+      responseData = '[HTML Response - Truncated]';
+    } else if (typeof responseData === 'string') {
+      // Attempt to parse if it might be stringified JSON, otherwise truncate
+      try {
+        const parsedJson = JSON.parse(responseData);
+        responseData = JSON.stringify(parsedJson, null, 2); // Pretty print for better readability
+        if (responseData.length > 1000) { // Truncate very long JSON strings
+          responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
         }
+      } catch (e) {
+        // Not JSON, just a string, truncate if too long
+        responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated String]' : '');
       }
     } else if (typeof responseData === 'object' && responseData !== null) {
+      // Already an object, try to stringify for logging, truncate if too long
       try {
         responseData = JSON.stringify(responseData, null, 2);
-         if (responseData.length > 1000) { 
-            responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
+        if (responseData.length > 1000) {
+          responseData = responseData.substring(0, 1000) + "... [Truncated JSON Object]";
         }
       } catch (e: any) {
-        if (e.message.includes('circular structure')) {
+         // Handle circular structures or other stringification errors
+        if (e.message && e.message.includes('circular structure')) {
           responseData = '[Circular Structure in JSON Response]';
         } else {
           responseData = '[Unserializable Object Response]';
         }
       }
-    } else if (responseData === undefined) {
-        responseData = '[No Response Data (undefined)]';
+    } else if (responseData === undefined || responseData === null) {
+        responseData = '[No Response Data (undefined/null)]';
     } else {
         responseData = `[Unexpected Response Data Type: ${typeof responseData}]`;
     }
@@ -57,10 +59,15 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
   }
 };
 
-export async function searchAnime(query: string, page: number = 1): Promise<{ currentPage: number, hasNextPage: boolean, results: AnimeSearchResult[] }> {
+interface PaginatedAnimeResults {
+  currentPage: number;
+  hasNextPage: boolean;
+  results: AnimeSearchResult[];
+}
+
+export async function searchAnime(query: string, page: number = 1): Promise<PaginatedAnimeResults> {
   const context = 'searchAnime (Zoro)';
   const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/${encodeURIComponent(query)}`;
-  
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Query Params:`, { page });
 
   try {
@@ -87,7 +94,6 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
 export async function getAnimeInfo(animeId: string): Promise<AnimeInfo | null> {
   const context = 'getAnimeInfo (Zoro)';
   const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/info`;
-
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Query Params:`, { id: animeId });
 
   try {
@@ -135,7 +141,6 @@ export async function getAnimeInfo(animeId: string): Promise<AnimeInfo | null> {
 export async function getEpisodeStreamingLinks(episodeId: string, server: string = 'vidcloud'): Promise<StreamingLinks | null> {
   const context = 'getEpisodeStreamingLinks (Zoro)';
   const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/watch/${encodeURIComponent(episodeId)}`; 
-
   console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Query Params:`, { server });
   
   try {
@@ -167,110 +172,44 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
   }
 }
 
-export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getTrendingAnimeList (Zoro /top-airing)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/top-airing`;
+async function fetchPaginatedAnimeList(endpoint: string, page: number = 1, context: string): Promise<PaginatedAnimeResults> {
+  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}${endpoint}`;
   console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
-      return (data.results || []) as AnimeSearchResult[];
+      return {
+        currentPage: Number(data.currentPage) || page,
+        hasNextPage: Boolean(data.hasNextPage),
+        results: (data.results || []) as AnimeSearchResult[],
+      };
     } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
-      return [];
+      return { currentPage: page, hasNextPage: false, results: [] };
     }
   } catch (error: any) {
     logApiError(error, context, requestUrl, { page });
-    return [];
+    return { currentPage: page, hasNextPage: false, results: [] };
   }
 }
 
-export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getPopularAnimeList (Zoro /most-popular)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/most-popular`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
-  try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-     if (data && Array.isArray(data.results)) {
-      return (data.results || []) as AnimeSearchResult[];
-    } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
-      return [];
-    }
-  } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
-    return [];
-  }
+
+export async function getTrendingAnimeList(page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList('/top-airing', page, 'getTrendingAnimeList (Zoro /top-airing)');
 }
 
-export async function getRecentEpisodesList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getRecentEpisodesList (Zoro /recent-episodes)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/recent-episodes`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
-  try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-    if (data && Array.isArray(data.results)) {
-      return (data.results || []) as AnimeSearchResult[];
-    } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
-      return [];
-    }
-  } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
-    return [];
-  }
+export async function getPopularAnimeList(page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList('/most-popular', page, 'getPopularAnimeList (Zoro /most-popular)');
 }
 
-export async function getMostFavoriteAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getMostFavoriteAnimeList (Zoro /most-favorite)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/most-favorite`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
-  try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-    if (data && Array.isArray(data.results)) {
-      return (data.results || []) as AnimeSearchResult[];
-    } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
-      return [];
-    }
-  } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
-    return [];
-  }
+export async function getRecentEpisodesList(page: number = 1): Promise<PaginatedAnimeResults> {
+ return fetchPaginatedAnimeList('/recent-episodes', page, 'getRecentEpisodesList (Zoro /recent-episodes)');
 }
 
-export async function getLatestCompletedAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getLatestCompletedAnimeList (Zoro /latest-completed)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/latest-completed`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
-  try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-    if (data && Array.isArray(data.results)) {
-      return (data.results || []) as AnimeSearchResult[];
-    } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
-      return [];
-    }
-  } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
-    return [];
-  }
+export async function getLatestCompletedAnimeList(page: number = 1): Promise<PaginatedAnimeResults> {
+ return fetchPaginatedAnimeList('/latest-completed', page, 'getLatestCompletedAnimeList (Zoro /latest-completed)');
 }
 
-export async function getRecentlyAddedAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
-  const context = 'getRecentlyAddedAnimeList (Zoro /recent-added)';
-  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/recent-added`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
-  try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
-    if (data && Array.isArray(data.results)) {
-      return (data.results || []) as AnimeSearchResult[];
-    } else {
-      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
-      return [];
-    }
-  } catch (error: any) {
-    logApiError(error, context, requestUrl, { page });
-    return [];
-  }
+export async function getRecentlyAddedAnimeList(page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList('/recent-added', page, 'getRecentlyAddedAnimeList (Zoro /recent-added)');
 }
