@@ -1,32 +1,8 @@
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Separator } from '@/components/ui/separator';
 import { Users } from 'lucide-react'; // Placeholder for social/community icon
-
-// KiwiIcon component defined directly in this file
-const KiwiIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M15.34 10.66a4 4 0 1 0-8.54-3.38"/>
-    <path d="M8.43 10.08c-.19.64-.23 1.4.13 2.19A4 4 0 0 0 16.71 8.7"/>
-    <path d="m10.5 10.5-2.02 2.02"/>
-    <path d="M13.5 13.5 16 16"/>
-    <path d="M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Z"/>
-    <path d="M12 17a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
-    <path d="M15 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
-    <path d="M9 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
-  </svg>
-);
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -52,10 +28,15 @@ export function Footer() {
           {/* Logo and Disclaimer */}
           <div className="md:col-span-5 lg:col-span-6 space-y-4">
             <Link href="/" className="flex items-center space-x-2 group">
-              <KiwiIcon className="h-8 w-8 text-primary group-hover:text-accent transition-colors" />
-              <span className="font-bold text-2xl text-foreground group-hover:text-accent transition-colors">
-                Kiwi Anime
-              </span>
+              <Image
+                src="/logo.png" // Assuming logo.png is in /public
+                alt="Kiwi Anime Logo"
+                width={180} // Adjust width as needed for footer
+                height={40} // Adjust height as needed for footer
+                className="h-10 w-auto" // Maintain aspect ratio, adjust height
+                data-ai-hint="site logo anime"
+              />
+              {/* Kiwi Anime text removed */}
             </Link>
             <p className="text-sm leading-relaxed">
               Kiwi Anime does not store any files on our server. We are linked to media which is hosted on 3rd party services.

@@ -2,14 +2,16 @@
 "use client";
 
 import Link from 'next/link';
-import { Home, Menu, Search as SearchIconLucide, UserCircle2, Film } from 'lucide-react'; 
+import Image from 'next/image';
+import { Home, Menu, Film, UserCircle2 } from 'lucide-react';
+import { Search as SearchIconLucide } from 'lucide-react'; // Renamed to avoid conflict
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import React, { useState } from 'react';
-import { HeaderSearchBar } from './HeaderSearchBar'; 
+import { HeaderSearchBar } from './HeaderSearchBar';
 import { AuthModal } from './AuthModal';
-import { UserNav } from './UserNav'; 
-import { useAuth } from '@/hooks/useAuth'; 
+import { UserNav } from './UserNav';
+import { useAuth } from '@/hooks/useAuth';
 
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -23,19 +25,16 @@ export function Header() {
       <header className="sticky top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center space-x-2" onClick={closeMobileMenu}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary h-7 w-7">
-              <path d="M15.34 10.66a4 4 0 1 0-8.54-3.38"/>
-              <path d="M8.43 10.08c-.19.64-.23 1.4.13 2.19A4 4 0 0 0 16.71 8.7"/>
-              <path d="m10.5 10.5-2.02 2.02"/>
-              <path d="M13.5 13.5 16 16"/>
-              <path d="M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Z"/>
-              <path d="M12 17a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
-              <path d="M15 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
-              <path d="M9 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
-            </svg>
-            <span className="font-bold sm:inline-block text-xl text-foreground">
-              Kiwi Anime
-            </span>
+            <Image
+              src="/logo.png" // Assuming logo.png is in /public
+              alt="Kiwi Anime Logo"
+              width={140} // Adjust width as needed
+              height={32} // Adjust height as needed
+              className="h-8 w-auto" // Maintain aspect ratio, adjust height
+              priority
+              data-ai-hint="site logo anime"
+            />
+            {/* Kiwi Anime text removed */}
           </Link>
 
           {/* Desktop Navigation & Search */}
@@ -62,8 +61,8 @@ export function Header() {
               {!loading && user ? (
                 <UserNav />
               ) : !loading ? (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="border-primary/30 text-primary hover:bg-primary/10 hover:text-primary-foreground"
                   onClick={() => setIsAuthModalOpen(true)}
                 >
@@ -71,7 +70,7 @@ export function Header() {
                   Log In
                 </Button>
               ) : (
-                <div className="h-9 w-20 animate-pulse rounded-md bg-muted"></div> 
+                <div className="h-9 w-20 animate-pulse rounded-md bg-muted"></div>
               )}
             </div>
           </div>
@@ -81,8 +80,8 @@ export function Header() {
              {!loading && user ? (
                 <UserNav />
               ) : !loading ? (
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="icon"
                   className="text-primary hover:bg-primary/10 hover:text-primary-foreground"
                   onClick={() => setIsAuthModalOpen(true)}
@@ -91,7 +90,7 @@ export function Header() {
                   <UserCircle2 className="h-5 w-5" />
                 </Button>
               ) : (
-                <div className="h-9 w-9 animate-pulse rounded-full bg-muted"></div> 
+                <div className="h-9 w-9 animate-pulse rounded-full bg-muted"></div>
               )}
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
@@ -102,32 +101,32 @@ export function Header() {
               </SheetTrigger>
               <SheetContent side="right" className="w-[280px] bg-background p-0 pt-6 flex flex-col">
                  <SheetHeader className="px-6">
-                   <SheetTitle className="sr-only">Navigation Menu</SheetTitle> 
+                   <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                  </SheetHeader>
                 <div className="px-6 mb-4">
                   <HeaderSearchBar onSearchSubmit={closeMobileMenu} />
                 </div>
                 <nav className="flex flex-col space-y-2 flex-grow px-6">
-                  <Link 
-                    href="/" 
+                  <Link
+                    href="/"
                     className="text-lg font-medium hover:text-primary transition-colors flex items-center py-2"
                     onClick={closeMobileMenu}
                   >
                     <Home className="mr-3 h-5 w-5" /> Home
                   </Link>
-                  <Link 
-                    href="/catalogue" 
+                  <Link
+                    href="/catalogue"
                     className="text-lg font-medium hover:text-primary transition-colors flex items-center py-2"
                     onClick={closeMobileMenu}
                   >
                     <Film className="mr-3 h-5 w-5" /> Catalogue
                   </Link>
-                  <Link 
-                    href="/search" 
+                  <Link
+                    href="/search"
                     className="text-lg font-medium hover:text-primary transition-colors flex items-center py-2"
                     onClick={closeMobileMenu}
                   >
-                    <SearchIconLucide className="mr-3 h-5 w-5" /> Browse All 
+                    <SearchIconLucide className="mr-3 h-5 w-5" /> Browse All
                   </Link>
                 </nav>
               </SheetContent>
