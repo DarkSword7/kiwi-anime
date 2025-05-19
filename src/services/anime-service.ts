@@ -14,7 +14,7 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
     message += ` with params: ${JSON.stringify(queryParams)}`;
   }
 
-  if (error.response) {
+  if (axios.isAxiosError(error) && error.response) {
     let responseData: any = error.response.data;
     if (typeof responseData === 'string') {
       if (responseData.trim().startsWith('<!DOCTYPE html>') || responseData.trim().startsWith('<html')) {
@@ -27,6 +27,7 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
              responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
           }
         } catch (e) {
+          // Keep as string if parsing fails, truncate if too long
           responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated String]' : '');
         }
       }
@@ -49,10 +50,10 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
         responseData = `[Unexpected Response Data Type: ${typeof responseData}]`;
     }
     console.error(`${message}. Status: ${error.response.status}, Data:`, responseData);
-  } else if (error.request) {
+  } else if (axios.isAxiosError(error) && error.request) {
     console.error(`${message}. No response received. Code: ${error.code || 'N/A'}, Message: ${error.message}`);
   } else {
-    console.error(`${message}. Error:`, error.message);
+    console.error(`${message}. Error:`, error instanceof Error ? error.message : String(error));
   }
 };
 
@@ -60,7 +61,7 @@ export async function searchAnime(query: string, page: number = 1): Promise<{ cu
   const context = 'searchAnime (Zoro)';
   const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/${encodeURIComponent(query)}`;
   
-  console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Params:`, { page });
+  console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}, Query Params:`, { page });
 
   try {
     const { data } = await axios.get(requestUrl, {
@@ -174,10 +175,7 @@ export async function getTrendingAnimeList(page: number = 1): Promise<AnimeSearc
     const { data } = await axios.get(requestUrl, { params: { page } });
     if (data && Array.isArray(data.results)) {
       return (data.results || []) as AnimeSearchResult[];
-    } else if (data && Array.isArray(data)) { // Some Consumet endpoints might return array directly
-        return (data || []) as AnimeSearchResult[];
-    }
-     else {
+    } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
       return [];
     }
@@ -195,10 +193,7 @@ export async function getPopularAnimeList(page: number = 1): Promise<AnimeSearch
     const { data } = await axios.get(requestUrl, { params: { page } });
      if (data && Array.isArray(data.results)) {
       return (data.results || []) as AnimeSearchResult[];
-    } else if (data && Array.isArray(data)) {
-        return (data || []) as AnimeSearchResult[];
-    }
-     else {
+    } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
       return [];
     }
@@ -214,11 +209,62 @@ export async function getRecentEpisodesList(page: number = 1): Promise<AnimeSear
   console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
   try {
     const { data } = await axios.get(requestUrl, { params: { page } });
-    // Assuming the structure is similar to search results or popular/trending
     if (data && Array.isArray(data.results)) {
       return (data.results || []) as AnimeSearchResult[];
-    } else if (data && Array.isArray(data)) { // Fallback if it's a direct array
-        return (data || []) as AnimeSearchResult[];
+    } else {
+      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      return [];
+    }
+  } catch (error: any) {
+    logApiError(error, context, requestUrl, { page });
+    return [];
+  }
+}
+
+export async function getMostFavoriteAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
+  const context = 'getMostFavoriteAnimeList (Zoro /most-favorite)';
+  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/most-favorite`;
+  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
+  try {
+    const { data } = await axios.get(requestUrl, { params: { page } });
+    if (data && Array.isArray(data.results)) {
+      return (data.results || []) as AnimeSearchResult[];
+    } else {
+      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      return [];
+    }
+  } catch (error: any) {
+    logApiError(error, context, requestUrl, { page });
+    return [];
+  }
+}
+
+export async function getLatestCompletedAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
+  const context = 'getLatestCompletedAnimeList (Zoro /latest-completed)';
+  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/latest-completed`;
+  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
+  try {
+    const { data } = await axios.get(requestUrl, { params: { page } });
+    if (data && Array.isArray(data.results)) {
+      return (data.results || []) as AnimeSearchResult[];
+    } else {
+      console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+      return [];
+    }
+  } catch (error: any) {
+    logApiError(error, context, requestUrl, { page });
+    return [];
+  }
+}
+
+export async function getRecentlyAddedAnimeList(page: number = 1): Promise<AnimeSearchResult[]> {
+  const context = 'getRecentlyAddedAnimeList (Zoro /recent-added)';
+  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/recent-added`;
+  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
+  try {
+    const { data } = await axios.get(requestUrl, { params: { page } });
+    if (data && Array.isArray(data.results)) {
+      return (data.results || []) as AnimeSearchResult[];
     } else {
       console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
       return [];
