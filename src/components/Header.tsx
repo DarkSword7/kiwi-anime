@@ -3,8 +3,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Home, Menu, Film, UserCircle2 } from 'lucide-react';
-import { Search as SearchIconLucide } from 'lucide-react'; // Renamed to avoid conflict
+import { Home, Menu, Film, UserCircle2, Search as SearchIconLucide } from 'lucide-react'; // Renamed to avoid conflict
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import React, { useState } from 'react';
@@ -23,18 +22,17 @@ export function Header() {
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2" onClick={closeMobileMenu}>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between"> {/* Added px-4 sm:px-6 lg:px-8 for padding */}
+          <Link href="/" onClick={closeMobileMenu}>
             <Image
-              src="/logo.png" // Assuming logo.png is in /public
+              src="/logo.png"
               alt="Kiwi Anime Logo"
-              width={140} // Adjust width as needed
-              height={32} // Adjust height as needed
-              className="h-8 w-auto" // Maintain aspect ratio, adjust height
+              width={158} // Adjusted width for new height
+              height={36} // Increased height
+              className="h-9 w-auto" // Increased height, width is auto to maintain aspect ratio
               priority
               data-ai-hint="site logo anime"
             />
-            {/* Kiwi Anime text removed */}
           </Link>
 
           {/* Desktop Navigation & Search */}
