@@ -86,9 +86,9 @@ export function CatalogueFilterSidebar({
                     {loadingGenres ? (
                       [...Array(8)].map((_, i) => <Skeleton key={i} className="h-9 w-full bg-muted" />)
                     ) : genres.length > 0 ? (
-                      genres.map((genre) => (
+                      genres.map((genre, index) => (
                         <Button
-                          key={genre.id}
+                          key={`${genre.id}-${index}`} // Ensured key uniqueness by appending index
                           variant={selectedGenre === genre.id ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => onGenreChange(selectedGenre === genre.id ? null : genre.id)}
