@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { AnimeSearchResult, AnimeInfo, StreamingLinks, SubtitleTrack } from '@/types/anime';
+import type { AnimeSearchResult, AnimeInfo, StreamingLinks, SubtitleTrack, PaginatedAnimeResults, Genre } from '@/types/anime';
 import axios from 'axios';
 
 const API_BASE_URL = 'https://animefreestream.vercel.app';
@@ -16,30 +16,25 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
 
   if (axios.isAxiosError(error) && error.response) {
     let responseData: any = error.response.data;
-    // Check if responseData is HTML
     if (typeof responseData === 'string' && responseData.trim().startsWith('<!DOCTYPE html>')) {
       responseData = '[HTML Response - Truncated]';
     } else if (typeof responseData === 'string') {
-      // Attempt to parse if it might be stringified JSON, otherwise truncate
       try {
         const parsedJson = JSON.parse(responseData);
-        responseData = JSON.stringify(parsedJson, null, 2); // Pretty print for better readability
-        if (responseData.length > 1000) { // Truncate very long JSON strings
+        responseData = JSON.stringify(parsedJson, null, 2); 
+        if (responseData.length > 1000) {
           responseData = responseData.substring(0, 1000) + "... [Truncated JSON]";
         }
       } catch (e) {
-        // Not JSON, just a string, truncate if too long
         responseData = responseData.substring(0, 500) + (responseData.length > 500 ? '... [Truncated String]' : '');
       }
     } else if (typeof responseData === 'object' && responseData !== null) {
-      // Already an object, try to stringify for logging, truncate if too long
       try {
         responseData = JSON.stringify(responseData, null, 2);
         if (responseData.length > 1000) {
           responseData = responseData.substring(0, 1000) + "... [Truncated JSON Object]";
         }
       } catch (e: any) {
-         // Handle circular structures or other stringification errors
         if (e.message && e.message.includes('circular structure')) {
           responseData = '[Circular Structure in JSON Response]';
         } else {
@@ -59,11 +54,6 @@ const logApiError = (error: any, context: string, requestUrl: string, queryParam
   }
 };
 
-interface PaginatedAnimeResults {
-  currentPage: number;
-  hasNextPage: boolean;
-  results: AnimeSearchResult[];
-}
 
 export async function searchAnime(query: string, page: number = 1): Promise<PaginatedAnimeResults> {
   const context = 'searchAnime (Zoro)';
@@ -172,11 +162,12 @@ export async function getEpisodeStreamingLinks(episodeId: string, server: string
   }
 }
 
-async function fetchPaginatedAnimeList(endpoint: string, page: number = 1, context: string): Promise<PaginatedAnimeResults> {
+async function fetchPaginatedAnimeList(endpoint: string, page: number = 1, context: string, additionalParams?: object): Promise<PaginatedAnimeResults> {
   const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}${endpoint}`;
-  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl}.`);
+  const queryParams = { page, ...additionalParams };
+  console.log(`[anime-service] ${context}: Fetching page ${page} from ${requestUrl} with params ${JSON.stringify(queryParams)}.`);
   try {
-    const { data } = await axios.get(requestUrl, { params: { page } });
+    const { data } = await axios.get(requestUrl, { params: queryParams });
     if (data && Array.isArray(data.results)) {
       return {
         currentPage: Number(data.currentPage) || page,
@@ -192,7 +183,6 @@ async function fetchPaginatedAnimeList(endpoint: string, page: number = 1, conte
     return { currentPage: page, hasNextPage: false, results: [] };
   }
 }
-
 
 export async function getTrendingAnimeList(page: number = 1): Promise<PaginatedAnimeResults> {
   return fetchPaginatedAnimeList('/top-airing', page, 'getTrendingAnimeList (Zoro /top-airing)');
@@ -212,4 +202,48 @@ export async function getLatestCompletedAnimeList(page: number = 1): Promise<Pag
 
 export async function getRecentlyAddedAnimeList(page: number = 1): Promise<PaginatedAnimeResults> {
   return fetchPaginatedAnimeList('/recent-added', page, 'getRecentlyAddedAnimeList (Zoro /recent-added)');
+}
+
+export async function getGenreList(): Promise<Genre[]> {
+  const context = 'getGenreList (Zoro)';
+  const requestUrl = `${API_BASE_URL}${ZORO_PROVIDER_PATH}/genre/list`;
+  console.log(`[anime-service] ${context}: Requesting URL: ${requestUrl}`);
+  try {
+    const { data } = await axios.get(requestUrl);
+    if (Array.isArray(data)) {
+      return data.map(g => ({ id: g.id || g.title, title: g.title })) as Genre[];
+    }
+    console.warn(`[anime-service] ${context}: Unexpected data structure from ${requestUrl}. Data:`, data);
+    return [];
+  } catch (error) {
+    logApiError(error, context, requestUrl);
+    return [];
+  }
+}
+
+export async function getAnimeByGenre(genre: string, page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList(`/genre/${encodeURIComponent(genre)}`, page, `getAnimeByGenre (Zoro /genre/${genre})`);
+}
+
+export async function getMoviesList(page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList('/movies', page, 'getMoviesList (Zoro /movies)');
+}
+
+export async function getOVASList(page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList('/ova', page, 'getOVASList (Zoro /ova)');
+}
+
+export async function getONASList(page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList('/ona', page, 'getONASList (Zoro /ona)');
+}
+
+export async function getSpecialsList(page: number = 1): Promise<PaginatedAnimeResults> {
+  return fetchPaginatedAnimeList('/specials', page, 'getSpecialsList (Zoro /specials)');
+}
+
+export async function getTVShowsList(page: number = 1): Promise<PaginatedAnimeResults> {
+  // The API docs list '/tv' - assuming this fetches TV shows.
+  // If it's a generic search for 'TV type', then searchAnime might be better.
+  // For now, using the dedicated /tv endpoint.
+  return fetchPaginatedAnimeList('/tv', page, 'getTVShowsList (Zoro /tv)');
 }

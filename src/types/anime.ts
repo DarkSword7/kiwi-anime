@@ -6,6 +6,7 @@ export interface AnimeSearchResult {
   image: string; // URL for cover image
   releaseDate?: string | null; // Can be year "2023" or full date "YYYY-MM-DD"
   subOrDub?: "sub" | "dub";
+  type?: string; // E.g., "TV", "Movie", "OVA" - often present in search results too
   // Other fields like 'url' to the anime page on the source might be present
 }
 
@@ -14,7 +15,7 @@ export interface AnimeInfo extends AnimeSearchResult {
   url?: string; // URL to the anime's page on the source site
   description?: string | null;
   genres?: string[];
-  type?: string | null; // E.g., "TV", "Movie"
+  // type?: string | null; // E.g., "TV", "Movie" // Already in AnimeSearchResult
   status?: string; // E.g., "Ongoing", "Completed"
   otherName?: string | null;
   totalEpisodes?: number;
@@ -51,10 +52,21 @@ export interface StreamingLinks {
     "User-Agent"?: string | null;
   };
   sources: StreamingSource[];
-  subtitles?: SubtitleTrack[]; // Added subtitles
+  subtitles?: SubtitleTrack[]; 
   download?: string; // Optional download link
 }
 
 // Unified Anime type for internal use, especially for components like AnimeCard
 // This can be expanded as needed.
 export type Anime = AnimeSearchResult & Partial<Pick<AnimeInfo, 'genres' | 'status' | 'description' | 'totalEpisodes'>>;
+
+export interface PaginatedAnimeResults {
+  currentPage: number;
+  hasNextPage: boolean;
+  results: AnimeSearchResult[];
+}
+
+export interface Genre {
+  id: string;
+  title: string;
+}
