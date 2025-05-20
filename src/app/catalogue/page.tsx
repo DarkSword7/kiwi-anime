@@ -11,7 +11,7 @@ import {
   getSpecialsList,
   getTVShowsList,
   getAnimeByGenre,
-  getTrendingAnimeList, // Ensured correct function name
+  getTrendingAnimeList,
 } from '@/services/anime-service';
 import type { AnimeSearchResult, PaginatedAnimeResults } from '@/types/anime';
 import { CatalogueAnimeCard } from '@/components/catalogue/CatalogueAnimeCard';
@@ -20,8 +20,8 @@ import { PaginationControls } from '@/components/PaginationControls';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, Loader2, LayoutGrid } from 'lucide-react';
-import CatalogueLoading from './loading'; // Import the loading component
-import Link from 'next/link';
+import CatalogueLoading from './loading';
+import { Breadcrumbs, type BreadcrumbItem } from '@/components/Breadcrumbs'; // Import Breadcrumbs
 
 function CataloguePageContent() {
   const router = useRouter();
@@ -33,11 +33,9 @@ function CataloguePageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Filter states
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
 
-  // Read initial filters from URL
   useEffect(() => {
     const typeFromUrl = searchParams.get('type');
     const genreFromUrl = searchParams.get('genre');
@@ -62,19 +60,18 @@ function CataloguePageContent() {
       if (currentQ) {
         data = await searchAnime(currentQ, pageToFetch);
       } else if (currentType) {
-        switch (currentType) {
+        switch (currentType.toLowerCase()) {
           case 'movie': data = await getMoviesList(pageToFetch); break;
           case 'ova': data = await getOVASList(pageToFetch); break;
           case 'ona': data = await getONASList(pageToFetch); break;
           case 'special': data = await getSpecialsList(pageToFetch); break;
           case 'tv': data = await getTVShowsList(pageToFetch); break;
-          default: data = await getTrendingAnimeList(pageToFetch); // Fallback for unknown type
+          default: data = await getTrendingAnimeList(pageToFetch);
         }
       } else if (currentGenre) {
         data = await getAnimeByGenre(currentGenre, pageToFetch);
       } else {
-        // Default fetch if no filters are active
-        data = await getTrendingAnimeList(pageToFetch); // Ensured correct function name
+        data = await getTrendingAnimeList(pageToFetch);
       }
     } catch (error) {
       console.error("Error fetching catalogue data:", error);
@@ -84,12 +81,12 @@ function CataloguePageContent() {
     setCurrentPage(data.currentPage || pageToFetch);
     setHasNextPage(data.hasNextPage || false);
     setIsLoading(false);
-  }, [searchParams]); // Re-run when searchParams change
+  }, [searchParams]);
 
   useEffect(() => {
     const pageFromUrl = parseInt(searchParams.get('page') || '1', 10);
     fetchData(pageFromUrl);
-  }, [fetchData, searchParams]); // searchParams will trigger this when filters change URL
+  }, [fetchData, searchParams]);
 
   const updateQueryParams = (paramsToUpdate: Record<string, string | null>) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));
@@ -100,7 +97,6 @@ function CataloguePageContent() {
         current.set(key, value);
       }
     });
-    // Reset page to 1 for any new filter other than page itself
     if (!('page' in paramsToUpdate)) {
       current.set('page', '1');
     }
@@ -110,11 +106,11 @@ function CataloguePageContent() {
 
   const handleSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    updateQueryParams({ q: searchTerm || null, type: null, genre: null }); // New search clears type/genre
+    updateQueryParams({ q: searchTerm || null, type: null, genre: null });
   };
   
   const handleApplyFilters = () => {
-    updateQueryParams({ type: selectedType, genre: selectedGenre, q: null }); // Applying filters clears search term
+    updateQueryParams({ type: selectedType, genre: selectedGenre, q: null });
   };
 
   const handleResetFilters = () => {
@@ -128,36 +124,37 @@ function CataloguePageContent() {
     updateQueryParams({ page: newPage.toString() });
   };
   
-  // Determine title based on filters
   let pageTitle = "Browse Catalogue";
   const typeParam = searchParams.get('type');
   const genreParam = searchParams.get('genre');
   const qParam = searchParams.get('q');
+  const breadcrumbItems: BreadcrumbItem[] = [{ label: "Home", href: "/" }];
 
   if (qParam) {
     pageTitle = `Search Results for "${qParam}"`;
+    breadcrumbItems.push({ label: "Catalogue", href: "/catalogue" });
+    breadcrumbItems.push({ label: `Search: ${qParam}` });
   } else if (typeParam) {
     pageTitle = `${typeParam.charAt(0).toUpperCase() + typeParam.slice(1)} Anime`;
+    breadcrumbItems.push({ label: "Catalogue", href: "/catalogue" });
+    breadcrumbItems.push({ label: typeParam.charAt(0).toUpperCase() + typeParam.slice(1) });
   } else if (genreParam) {
-     // Assuming genre names are human-readable, if not, we'd need a map from ID to title
     pageTitle = `${genreParam.charAt(0).toUpperCase() + genreParam.slice(1)} Genre`;
+     breadcrumbItems.push({ label: "Catalogue", href: "/catalogue" });
+    breadcrumbItems.push({ label: `Genre: ${genreParam.charAt(0).toUpperCase() + genreParam.slice(1)}` });
+  } else {
+    breadcrumbItems.push({ label: "Catalogue" });
   }
 
 
   return (
     <div className="container mx-auto px-4 py-8 text-foreground">
-      {/* Breadcrumbs and Title */}
+      <Breadcrumbs items={breadcrumbItems} />
       <div className="mb-8">
-        <nav className="text-sm text-muted-foreground mb-1">
-          <Link href="/" className="hover:text-primary">Home</Link>
-          <span className="mx-2">/</span>
-          <span>Catalogue</span>
-        </nav>
         <h1 className="text-3xl md:text-4xl font-bold text-primary tracking-tight">{pageTitle}</h1>
         <p className="text-muted-foreground mt-1">Explore our extensive collection. Use the filters to find your next favorite show.</p>
       </div>
 
-      {/* Catalogue Search Bar */}
       <form onSubmit={handleSearchSubmit} className="mb-8">
         <div className="relative">
           <Input
@@ -175,7 +172,6 @@ function CataloguePageContent() {
       </form>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] lg:grid-cols-[1fr_300px] gap-8 items-start">
-        {/* Main Content Area */}
         <main className="md:order-1 space-y-6">
           {isLoading && animeList.length === 0 && (
             <div className="flex justify-center items-center min-h-[300px]">
@@ -190,7 +186,7 @@ function CataloguePageContent() {
             </div>
           )}
           {animeList.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-5"> {/* Adjusted to 3 columns for XL */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-5">
               {animeList.map((anime) => (
                 <CatalogueAnimeCard key={anime.id + '-' + (anime.title || '') + '-' + currentPage} anime={anime} />
               ))}
@@ -207,7 +203,6 @@ function CataloguePageContent() {
           )}
         </main>
 
-        {/* Filter Sidebar */}
         <div className="md:order-2 w-full md:w-auto">
           <CatalogueFilterSidebar
             selectedType={selectedType}
@@ -223,7 +218,6 @@ function CataloguePageContent() {
   );
 }
 
-// Wrap CataloguePageContent with Suspense for useSearchParams
 export default function CataloguePage() {
   return (
     <Suspense fallback={<CatalogueLoading />}>

@@ -9,7 +9,7 @@ import { CalendarDays, Tv, Film, Clapperboard, Info, List, ShieldQuestion } from
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-// CommentsSection and QueryClientProvider removed from here
+import { Breadcrumbs, type BreadcrumbItem } from '@/components/Breadcrumbs';
 
 interface AnimeDetailsPageClientProps {
   anime: AnimeInfo;
@@ -20,9 +20,15 @@ export function AnimeDetailsPageClient({ anime }: AnimeDetailsPageClientProps) {
   const bannerImageUrl = anime.cover || anime.image || 'https://placehold.co/1200x400.png?text=Banner+Not+Available'; 
   const coverImageUrl = anime.image || 'https://placehold.co/220x330.png?text=Cover';
 
+  const breadcrumbItems: BreadcrumbItem[] = [
+    { label: "Home", href: "/" },
+    { label: "Anime", href: "/catalogue" }, // Or link to a general browse/search page if preferred
+    { label: anime.title }
+  ];
+
   return (
-    // QueryClientProvider removed as CommentsSection is no longer here
     <div className="max-w-6xl mx-auto text-foreground">
+      <Breadcrumbs items={breadcrumbItems} />
       {/* Banner Section */}
       <div className="relative h-64 md:h-80 lg:h-96 w-full rounded-lg overflow-hidden shadow-2xl mb-[-80px] md:mb-[-120px]">
         <Image
@@ -144,8 +150,6 @@ export function AnimeDetailsPageClient({ anime }: AnimeDetailsPageClientProps) {
           )}
         </CardContent>
       </Card>
-
-      {/* CommentsSection removed from here */}
     </div>
   );
 }

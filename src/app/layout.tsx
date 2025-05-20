@@ -7,7 +7,8 @@ import './globals.css';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from '@/context/AuthContext'; // Import AuthProvider
+import { AuthProvider } from '@/context/AuthContext';
+import { InitialLoadingAnimation } from '@/components/InitialLoadingAnimation'; // Import the new component
 
 // Vidstack styles
 import '@vidstack/react/player/styles/default/theme.css';
@@ -30,7 +31,8 @@ export default function RootLayout({
         {/* RichAds script removed */}
       </head>
       <body className={`font-sans antialiased flex flex-col min-h-screen bg-background text-foreground`}>
-        <AuthProvider> {/* Wrap with AuthProvider */}
+        <InitialLoadingAnimation /> {/* Add the animation component here */}
+        <AuthProvider>
           <Header />
           <main className="flex-grow container mx-auto px-4 py-8">
             {children}

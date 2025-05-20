@@ -11,7 +11,8 @@ import {
 import type { AnimeSearchResult } from '@/types/anime';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import ListPageLoading from './loading'; // Import loading component
+import ListPageLoading from './loading';
+import { Breadcrumbs, type BreadcrumbItem } from '@/components/Breadcrumbs'; // Import Breadcrumbs
 
 interface ListPageProps {
   params: {
@@ -28,11 +29,10 @@ interface FetchFunctionMap {
 
 const fetchFunctions: FetchFunctionMap = {
   'popular': getPopularAnimeList,
-  'trending': getTrendingAnimeList, // Corresponds to top-airing
+  'trending': getTrendingAnimeList,
   'recent-episodes': getRecentEpisodesList,
   'latest-completed': getLatestCompletedAnimeList,
   'recently-added': getRecentlyAddedAnimeList,
-  // Add more types as needed, e.g., 'most-favorite'
 };
 
 const typeToTitleMap: { [key: string]: string } = {
@@ -56,11 +56,16 @@ export default async function ListPage({ params, searchParams }: ListPageProps) 
 
   const data = await fetchFunction(page);
 
+  const breadcrumbItems: BreadcrumbItem[] = [
+    { label: "Home", href: "/" },
+    { label: "Catalogue", href: "/catalogue" }, // Or a more general "Lists" page if you had one
+    { label: pageTitle }
+  ];
+
   if (!data) {
-    // This case might be handled by the service returning empty results
-    // but good to have a fallback if service itself returns null.
     return (
       <div className="py-8 text-center">
+        <Breadcrumbs items={breadcrumbItems} className="max-w-5xl mx-auto px-4"/>
         <h1 className="text-3xl md:text-4xl font-bold mb-8 text-primary">{pageTitle}</h1>
         <p className="text-muted-foreground">Could not load anime for this section.</p>
       </div>
@@ -71,6 +76,7 @@ export default async function ListPage({ params, searchParams }: ListPageProps) 
 
   return (
     <div className="py-8">
+      <Breadcrumbs items={breadcrumbItems} className="max-w-5xl mx-auto px-4"/>
       <h1 className="text-3xl md:text-4xl font-bold mb-8 text-primary text-center">
         {pageTitle}
       </h1>
@@ -95,11 +101,3 @@ export default async function ListPage({ params, searchParams }: ListPageProps) 
     </div>
   );
 }
-
-// Optional: Add generateStaticParams if you want to pre-render these list types
-// export async function generateStaticParams() {
-//   return Object.keys(typeToTitleMap).map((type) => ({
-//     type: type,
-//   }));
-// }
-
