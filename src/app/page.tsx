@@ -30,7 +30,7 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async functionfetchAllData() {
+    async function fetchAllData() {
       setIsLoading(true);
       const [
         trendingResult, 
