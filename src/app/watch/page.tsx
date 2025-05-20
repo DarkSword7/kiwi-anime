@@ -7,10 +7,10 @@ import {
   MediaProvider, 
   Track, 
   type MediaPlayerInstance, 
-  type MediaProviderAdapter, 
-  type HLSProviderObject, // Updated HLSProvider type if available, else keep as is
+  type MediaProviderAdapter,
   Captions 
 } from '@vidstack/react';
+import type { HLSProviderObject } from '@vidstack/react/providers/hls';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
 import { getEpisodeStreamingLinks, getAnimeInfo } from '@/services/anime-service';
 import type { StreamingLinks, AnimeInfo, StreamingSource, SubtitleTrack, Episode } from '@/types/anime';
@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Loader2, ArrowLeft, Tv, SkipBack, SkipForward, Settings2, ListVideo, Info } from 'lucide-react';
 import {
   Select,
@@ -31,13 +30,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { CommentsSection } from '@/components/comments/CommentsSection'; // Import CommentsSection
+import { CommentsSection } from '@/components/comments/CommentsSection';
+import { addOrUpdateContinueWatchingItem } from '@/lib/localStorageUtils'; // Import new util
 
 const CIPHERTV_CORS_PROXY_URL = 'https://proxys.ciphertv.dev/proxy?url=';
 
 interface WatchPageContentProps {}
 
-// Create a stable QueryClient instance
 const queryClient = new QueryClient();
 
 function WatchPageContent({}: WatchPageContentProps) {
@@ -58,8 +57,9 @@ function WatchPageContent({}: WatchPageContentProps) {
   const [selectedQuality, setSelectedQuality] = useState<string | undefined>(undefined);
   const [hlsProvider, setHlsProvider] = useState<HLSProviderObject | null>(null);
 
-
   const availableServers = ["vidstreaming", "vidcloud", "streamsb", "streamtape", "animepahe", "zoro"]; 
+
+  console.log(`[WatchPageContent] Initializing. episodeIdFromQuery: ${episodeIdFromQuery}, animeId: ${animeId}, selectedServer: ${selectedServer}`);
 
   useEffect(() => {
     async function fetchData() {
@@ -67,6 +67,7 @@ function WatchPageContent({}: WatchPageContentProps) {
         setError("Episode ID is missing from URL.");
         setIsLoading(false);
         setIsLoadingStream(false);
+        console.warn("[WatchPageContent] fetchData aborted: episodeIdFromQuery is missing.");
         return;
       }
       
@@ -75,13 +76,16 @@ function WatchPageContent({}: WatchPageContentProps) {
       setError(null);
       setStreamingInfo(null); 
       setSelectedQuality(undefined);
-      setHlsProvider(null);
+      // setHlsProvider(null); // Keep hlsProvider instance, it's reconfigured later
 
       try {
         const linksPromise = getEpisodeStreamingLinks(episodeIdFromQuery, selectedServer);
         const detailsPromise = animeId ? getAnimeInfo(animeId) : Promise.resolve(null);
 
         const [links, details] = await Promise.all([linksPromise, detailsPromise]);
+        console.log("[WatchPageContent] API getEpisodeStreamingLinks response:", JSON.stringify(links, null, 2));
+        console.log("[WatchPageContent] API getAnimeInfo response:", JSON.stringify(details, null, 2));
+
 
         if (links && links.sources && links.sources.length > 0) {
           setStreamingInfo(links);
@@ -93,24 +97,35 @@ function WatchPageContent({}: WatchPageContentProps) {
           const firstSource = links.sources[0];
           const qualityToSet = defaultQualitySource?.quality || firstSource?.quality;
           setSelectedQuality(qualityToSet);
+          console.log("[WatchPageContent] Streaming links found. Sources count:", links.sources.length, "Selected quality set to:", qualityToSet);
         } else {
           const errorMsg = `No streaming links found for episode on server '${selectedServer}'. Try another server.`;
           setError(errorMsg);
           setStreamingInfo(null); 
+          console.warn("[WatchPageContent] No streaming links found or sources array is empty. Error set:", errorMsg);
         }
 
         if (details) {
           setAnimeDetails(details);
+           // Add to continue watching
+           const currentEpisode = details.episodes?.find(ep => ep.id === episodeIdFromQuery || ep.number === currentEpNumber);
+           if (currentEpisode) {
+             addOrUpdateContinueWatchingItem(details, currentEpisode);
+             console.log("[WatchPageContent] Updated continue watching list for:", details.title, "Episode:", currentEpisode.number);
+           }
+
         } else if (animeId) {
           console.warn("[WatchPageContent] Could not fetch anime details for animeId:", animeId);
         }
 
       } catch (e: any) {
+        console.error("[WatchPageContent] Error in fetchData:", e);
         setError(e.message || `Could not load video for server '${selectedServer}'. Try again or select a different server.`);
         setStreamingInfo(null); 
       } finally {
         setIsLoading(false);
         setIsLoadingStream(false);
+        console.log("[WatchPageContent] fetchData finished. isLoading/isLoadingStream set to false.");
       }
     }
     if (episodeIdFromQuery) { 
@@ -119,66 +134,86 @@ function WatchPageContent({}: WatchPageContentProps) {
         setIsLoading(false); 
         setIsLoadingStream(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodeIdFromQuery, animeId, selectedServer]); 
 
 
   const currentSource = useMemo(() => {
     if (!streamingInfo || !streamingInfo.sources || streamingInfo.sources.length === 0) {
+      console.log("[WatchPageContent] currentSource derived: undefined (no streamingInfo or sources)");
       return undefined;
     }
     const sourceByQuality = selectedQuality ? streamingInfo.sources.find(s => s.quality === selectedQuality) : undefined;
     const defaultSource = streamingInfo.sources.find(s => s.quality?.toLowerCase() === 'default' || s.quality?.toLowerCase() === 'auto') || streamingInfo.sources[0];
-    return sourceByQuality || defaultSource;
+    const finalSource = sourceByQuality || defaultSource;
+    console.log("[WatchPageContent] currentSource derived:", JSON.stringify(finalSource, null, 2), "from selectedQuality:", selectedQuality);
+    return finalSource;
   }, [streamingInfo, selectedQuality]);
   
   const playerSrcUrl = useMemo(() => {
     if (!currentSource?.url) {
+      console.log("[WatchPageContent] playerSrcUrl derived: undefined (no currentSource.url)");
       return undefined;
     }
     let url = currentSource.url;
     if (url.startsWith('http') && !url.includes('animefreestream.vercel.app/') && !url.includes('localhost') && !url.includes(CIPHERTV_CORS_PROXY_URL.split('?')[0])) {
-        return `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
+        const proxiedUrl = `${CIPHERTV_CORS_PROXY_URL}${encodeURIComponent(url)}`;
+        console.log("[WatchPageContent] Using CORS proxied URL for player manifest:", proxiedUrl, "Original:", url);
+        return proxiedUrl;
     }
+    console.log("[WatchPageContent] Using direct URL for player manifest (no proxy):", url);
     return url;
   }, [currentSource]);
 
    useEffect(() => {
+    console.log('[WatchPageContent] HLS Effect Triggered. hlsProvider:', hlsProvider, 'streamingInfo.headers:', streamingInfo?.headers, 'currentSource.isM3U8:', currentSource?.isM3U8);
     if (hlsProvider && streamingInfo?.headers && Object.keys(streamingInfo.headers).length > 0 && currentSource?.isM3U8) {
       const safeHeadersToSet: Record<string, string> = {};
       for (const key in streamingInfo.headers) {
         if (Object.prototype.hasOwnProperty.call(streamingInfo.headers, key)) {
-          const headerValue = streamingInfo.headers[key];
-          if (headerValue && key.toLowerCase() !== 'referer') { 
+          const headerValue = streamingInfo.headers[key as keyof typeof streamingInfo.headers];
+          // Browsers block setting 'Referer' client-side for XHR if not from the same origin or via specific mechanisms
+          // However, HLS.js might handle this internally or some proxies might work with it.
+          // For now, we attempt to set what the API provides.
+          if (headerValue) { 
              safeHeadersToSet[key] = headerValue as string;
           }
         }
       }
 
       if (Object.keys(safeHeadersToSet).length > 0) {
+        console.log('[WatchPageContent] Configuring HLS provider with custom headers:', safeHeadersToSet);
         if (!hlsProvider.config) hlsProvider.config = {}; 
         const previousXhrSetup = hlsProvider.config.xhrSetup; 
         hlsProvider.config.xhrSetup = (xhr: XMLHttpRequest, requestUrl: string) => {
+            console.log(`[WatchPageContent] HLS xhrSetup for ${requestUrl}. Applying headers:`, safeHeadersToSet);
             if(previousXhrSetup) previousXhrSetup(xhr, requestUrl); 
             for (const headerKey in safeHeadersToSet) {
               try {
                 xhr.setRequestHeader(headerKey, safeHeadersToSet[headerKey]);
               } catch (e) {
-                console.warn(`[WatchPageContent] Failed to set header '${headerKey}' for HLS request. Error:`, e);
+                console.warn(`[WatchPageContent] Failed to set header '${headerKey}' for HLS request to ${requestUrl}. Error:`, e);
               }
             }
           };
       } else {
+         console.log('[WatchPageContent] No safe headers to set for HLS provider.');
         if (hlsProvider.config?.xhrSetup) { 
+            console.log('[WatchPageContent] Clearing existing HLS xhrSetup.');
             delete hlsProvider.config.xhrSetup; 
         }
       }
     } else if (hlsProvider && hlsProvider.config?.xhrSetup && (!streamingInfo?.headers || Object.keys(streamingInfo.headers).length === 0 || !currentSource?.isM3U8)) {
+        console.log('[WatchPageContent] Conditions not met for HLS header setup, clearing existing xhrSetup.');
         delete hlsProvider.config.xhrSetup;
+    } else if (!hlsProvider) {
+        console.log('[WatchPageContent] HLS provider instance is null, cannot configure headers.');
     }
   }, [hlsProvider, streamingInfo, currentSource]);
 
 
   const handleServerChange = (newServer: string) => {
+    console.log("[WatchPageContent] Server changed to:", newServer);
     setHlsProvider(null); 
     setSelectedServer(newServer);
   };
@@ -202,19 +237,17 @@ function WatchPageContent({}: WatchPageContentProps) {
   const hasPrevEpisode = currentEpNumber > 1 && animeDetails?.episodes?.some(ep => ep.number === currentEpNumber - 1);
   const hasNextEpisode = animeDetails?.episodes?.some(ep => ep.number === currentEpNumber + 1);
 
-  const getLangCode = (langLabel: string): string => {
+  const getLangCode = (langLabel: string | null | undefined): string => {
     if (!langLabel) return 'und';
     let lowerLangLabel = langLabel.toLowerCase().trim();
 
-    if (lowerLangLabel.includes('thumbnails')) return 'und';
-    if (lowerLangLabel.includes('commentary')) return 'und';
-
+    if (lowerLangLabel.includes('thumbnails')) return 'und'; // Skip thumbnail tracks
 
     const langMap: { regex: RegExp; code: string }[] = [
         { regex: /english|eng(?:[^a-zA-Z]|$)/i, code: "en" },
         { regex: /spanish.*latin america|español.*am(?:é|e)rica latina|es-la/i, code: "es-LA" },
         { regex: /spanish|español|es(?:[^a-zA-Z]|$)/i, code: "es" },
-        { regex: /portuguese.*brazil|português.*brasil|pt-br/i, code: "pt-BR" },
+        { regex: /portuguese.*brazil|português.*brasil|pt-br|portuguese \(brazil\)|português \(brasil\)/i, code: "pt-BR" },
         { regex: /portuguese|português|pt(?:[^a-zA-Z]|$)/i, code: "pt" },
         { regex: /french|français|fr(?:[^a-zA-Z]|$)/i, code: "fr" },
         { regex: /german|deutsch|de(?:[^a-zA-Z]|$)/i, code: "de" },
@@ -235,18 +268,32 @@ function WatchPageContent({}: WatchPageContentProps) {
         if (entry.regex.test(lowerLangLabel)) return entry.code;
     }
     
+    // Fallback for labels like "Language - CR_Language"
+    const crMatch = lowerLangLabel.match(/^([a-z\s]+)\s*-\s*cr_[a-z]+/i);
+    if (crMatch && crMatch[1]) {
+        const firstPart = crMatch[1].trim();
+        for (const entry of langMap) {
+            if (entry.regex.test(firstPart)) return entry.code;
+        }
+    }
+
     const mainLangPart = lowerLangLabel.split(/[-_\s(]/)[0];
     if (/^[a-z]{2,3}$/.test(mainLangPart)) return mainLangPart;
-
+    
+    console.warn(`[WatchPageContent] Unknown langLabel for getLangCode: '${langLabel}', extracted main: '${mainLangPart}', falling back to 'und'.`);
     return 'und';
   };
 
   const getDirectSubtitleUrl = (originalUrl: string): string => {
+    // We are now attempting direct loading for subtitles, no proxy.
+    console.log(`[WatchPageContent] Using direct URL for subtitle (no proxy): ${originalUrl}`);
     return originalUrl;
   };
   
   const actualSubtitles = useMemo(() => {
-    return streamingInfo?.subtitles?.filter(sub => sub.lang && !sub.lang.toLowerCase().includes('thumbnails')) || [];
+    const subs = streamingInfo?.subtitles?.filter(sub => sub.lang && !sub.lang.toLowerCase().includes('thumbnails')) || [];
+    console.log("[WatchPageContent] Filtered actualSubtitles:", JSON.stringify(subs));
+    return subs;
   }, [streamingInfo?.subtitles]);
   
   const defaultTrackSrcLang = useMemo(() => {
@@ -263,10 +310,11 @@ function WatchPageContent({}: WatchPageContentProps) {
     }
     for (const sub of actualSubtitles) {
         const langCode = getLangCode(sub.lang);
-        if (langCode !== 'und') return langCode;
+        if (langCode !== 'und') return langCode; // Pick the first valid one
     }
     return null;
   }, [actualSubtitles]);
+  console.log("[WatchPageContent] Default subtitle track language determined as:", defaultTrackSrcLang);
 
 
   if (isLoading && !animeDetails) { 
@@ -296,6 +344,7 @@ function WatchPageContent({}: WatchPageContentProps) {
   }
   
   const coverImageUrl = animeDetails?.image || 'https://placehold.co/220x330.png?text=Cover';
+  console.log("[WatchPageContent] About to render MediaPlayer. streamingInfo?.subtitles:", JSON.stringify(streamingInfo?.subtitles));
 
   return (
     <div className="flex flex-col md:flex-row gap-4 lg:gap-6 py-4 md:py-6 max-w-none">
@@ -375,11 +424,16 @@ function WatchPageContent({}: WatchPageContentProps) {
               crossOrigin 
               playsInline
               onProviderChange={(provider: MediaProviderAdapter | null) => {
-                if (provider?.type === 'hls') {
+                 console.log('[WatchPageContent] onProviderChange called. Provider:', provider);
+                 if (provider?.type === 'hls') {
+                    console.log('[WatchPageContent] HLS provider instance obtained:', provider);
                     setHlsProvider(provider as HLSProviderObject);
-                } else {
-                    if(hlsProvider) setHlsProvider(null);
-                }
+                 } else {
+                    if(hlsProvider) {
+                       console.log('[WatchPageContent] Clearing HLS provider instance.');
+                       setHlsProvider(null);
+                    }
+                 }
               }}
               onTextTracksChange={(tracks, event) => { 
                 console.log('[Vidstack] TextTracksChange:', tracks.map(t => ({label: t.label, language: t.language, mode: t.mode, kind: t.kind, id: t.id, src: t.src, type: t.type, default: t.default })));
@@ -391,8 +445,12 @@ function WatchPageContent({}: WatchPageContentProps) {
               <MediaProvider>
                  {actualSubtitles.map((sub) => {
                   const trackSrcLang = getLangCode(sub.lang);
-                   if (trackSrcLang === 'und') return null;
+                   if (trackSrcLang === 'und') {
+                      console.log(`[WatchPageContent] Skipping track due to 'und' srcLang: lang='${sub.lang}'`);
+                      return null; // Skip tracks with undetermined language
+                   }
                   const subtitleUrl = getDirectSubtitleUrl(sub.url); 
+                  console.log(`[WatchPageContent] Rendering track: lang='${sub.lang}', srcLang='${trackSrcLang}', default=${trackSrcLang === defaultTrackSrcLang}, originalUrl='${sub.url}', directUrl='${subtitleUrl}'`);
                   return (
                     <Track
                       key={sub.url} 
@@ -400,7 +458,7 @@ function WatchPageContent({}: WatchPageContentProps) {
                       kind="subtitles" 
                       label={sub.lang} 
                       lang={trackSrcLang}  
-                      default={trackSrcLang === defaultTrackSrcLang && trackSrcLang !== 'und'}
+                      default={trackSrcLang === defaultTrackSrcLang}
                       type="vtt" 
                       crossOrigin="anonymous"
                     />

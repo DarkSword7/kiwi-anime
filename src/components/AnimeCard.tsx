@@ -6,15 +6,17 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 interface AnimeCardProps {
-  anime: AnimeSearchResult;
+  anime: AnimeSearchResult & { episodeNumber?: number; animeType?: string }; // Add optional episodeNumber and animeType
+  watchLink?: string; // Optional link for direct watch
 }
 
-export function AnimeCard({ anime }: AnimeCardProps) {
+export function AnimeCard({ anime, watchLink }: AnimeCardProps) {
   const imageUrl = anime.image || 'https://placehold.co/200x300.png?text=No+Image';
   const dataAiHint = anime.image ? "anime poster portrait" : "placeholder anime";
+  const linkHref = watchLink || `/anime/${anime.id}`;
 
   return (
-    <Link href={`/anime/${anime.id}`} passHref prefetch={false}>
+    <Link href={linkHref} passHref prefetch={false}>
       <Card className="h-full flex flex-col bg-card border-border/50 rounded-lg overflow-hidden group transition-all duration-300 ease-in-out hover:shadow-xl hover:border-primary/50 hover:scale-[1.02]">
         <div className="relative aspect-[2/3] w-full overflow-hidden">
           <Image
@@ -27,8 +29,16 @@ export function AnimeCard({ anime }: AnimeCardProps) {
             unoptimized={!anime.image}
           />
            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-2">
-            {/* Potential overlay content, e.g., play icon or quick info, not implemented for now */}
+            {/* Potential overlay content */}
           </div>
+           {anime.episodeNumber && (
+             <Badge 
+                variant="default"
+                className="absolute top-2 left-2 bg-primary/90 text-primary-foreground text-[10px] px-1.5 py-0.5 backdrop-blur-sm shadow-md"
+             >
+                Ep {anime.episodeNumber}
+             </Badge>
+           )}
         </div>
         <CardContent className="p-2.5 space-y-1 flex-grow flex flex-col justify-between">
           <div>
@@ -37,7 +47,7 @@ export function AnimeCard({ anime }: AnimeCardProps) {
             </h3>
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
-            {anime.type && <span className="capitalize text-[10px] sm:text-xs">{anime.type}</span>}
+            {(anime.type || anime.animeType) && <span className="capitalize text-[10px] sm:text-xs">{anime.type || anime.animeType}</span>}
             {anime.subOrDub && (
               <Badge 
                 variant={anime.subOrDub.toLowerCase() === 'dub' ? 'secondary' : 'outline'} 

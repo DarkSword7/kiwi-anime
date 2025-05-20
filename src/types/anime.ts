@@ -26,7 +26,7 @@ export interface AnimeInfo extends AnimeSearchResult {
 export interface Episode {
   id: string; // Episode ID, used for fetching streaming links, e.g., "159332"
   number: number; // Episode number
-  title?: string; // Optional: API might provide title, or we can generate "Episode X"
+  title?: string | null; // Optional: API might provide title, or we can generate "Episode X"
   url?: string; // URL to the episode's page on the source site
   isFiller?: boolean; // Optional: some APIs might provide this
 }
@@ -52,7 +52,7 @@ export interface StreamingLinks {
     "User-Agent"?: string | null;
   };
   sources: StreamingSource[];
-  subtitles?: SubtitleTrack[]; 
+  subtitles?: SubtitleTrack[];
   download?: string; // Optional download link
 }
 
@@ -69,4 +69,17 @@ export interface PaginatedAnimeResults {
 export interface Genre {
   id: string;
   title: string;
+}
+
+export interface ContinueWatchingItem {
+  animeId: string;
+  animeTitle: string;
+  animeImage: string;
+  animeType?: string; // Store the type if available from AnimeInfo
+  episodeId: string;
+  episodeNumber: number;
+  episodeTitle?: string | null;
+  lastWatchedTimestamp: number;
+  // Optional: For direct watch link construction
+  totalEpisodes?: number; 
 }
