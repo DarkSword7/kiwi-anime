@@ -2,7 +2,6 @@
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
-import Script from 'next/script';
 import './globals.css';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -40,20 +39,6 @@ export default function RootLayout({
           <Footer />
           <Toaster />
         </AuthProvider>
-        <Script
-          id="adsterra-popunder"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                var script = document.createElement('script');
-                script.type = 'text/javascript';
-                script.src = '//pl26673537.profitableratecpm.com/dc/a9/24/dca92418362de52e71b2416a719f9fd5.js';
-                document.body.appendChild(script);
-              })();
-            `,
-          }}
-        />
       </body>
     </html>
   );
